@@ -21,26 +21,27 @@ flag debug
   default: False
 
 library
-  exposed-modules:      Ohua.IR.Transform
-                      , Ohua.IR.Transform.Pmap
-                      , Ohua.IR.Transform.DeadCodeElimination
-                      , Ohua.Compat
-                      , Ohua.ALang.Conversion.Native
+  exposed-modules:      
+    --   Ohua.IR.Transform
+    -- , Ohua.IR.Transform.Pmap
+    -- , Ohua.IR.Transform.DeadCodeElimination
+    Ohua.Compat
 
   -- other-modules:
   -- other-extensions:
-  build-depends:        base >=4.8 && <4.9
-                      , transformers
-                      , microlens == 0.4.7.0
-                      , microlens-mtl == 0.1.10.0
-                      , unordered-containers
-                      , mtl
-                      , hashable >= 1.2.4.0 && <= 1.2.6.0
-                      , containers
-                      , extra == 1.5.2
-                      , monad-loops
-                      , deepseq==1.4.2.0
-                      , ohua
+  build-depends:        
+      base >=4.8 && <4.9
+    , transformers
+    , microlens == 0.4.7.0
+    , microlens-mtl == 0.1.10.0
+    , unordered-containers
+    , mtl
+    , hashable >= 1.2.4.0 && <= 1.2.6.0
+    , containers
+    , extra == 1.5.2
+    , monad-loops
+    , deepseq==1.4.2.0
+    , ohua-core
   hs-source-dirs:      src/eta
   default-language:    Haskell2010
   java-sources:        
@@ -52,6 +53,11 @@ library
     , src/java/com/ohua/util/ResolvedSymbol.java
     , src/java/com/ohua/util/Assignment.java
     , src/java/com/ohua/util/Binding.java
+    , src/java/com/ohua/util/Arc.java
+    , src/java/com/ohua/util/Graph.java
+    , src/java/com/ohua/util/Target.java
+    , src/java/com/ohua/util/Operator.java
+    , src/java/com/ohua/util/Source.java
   default-extensions:  
       OverloadedStrings
     , MultiParamTypeClasses
