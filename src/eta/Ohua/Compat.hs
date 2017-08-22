@@ -24,8 +24,8 @@ import Unsafe.Coerce
 
 data {-# CLASS "clojure.lang.Symbol" #-} Symbol = Symbol (Object# Symbol) deriving Class
 
-foreign import java "@static com.ohua.util.Eta.createSymbol" createSymbol :: String -> String -> Symbol
-foreign import java "@static com.ohua.util.Eta.createSymbol" createSymbol1 :: String -> Symbol
+foreign import java "@static ohua.util.Eta.createSymbol" createSymbol :: String -> String -> Symbol
+foreign import java "@static ohua.util.Eta.createSymbol" createSymbol1 :: String -> Symbol
 
 foreign import java "getName" symGetName :: Symbol -> String
 foreign import java "getNamespace" symGetNamespace :: Symbol -> Maybe String
@@ -63,22 +63,22 @@ instance NativeConverter Expression where
                     (fromNative $ nLetExprBody let_)
             _ -> error "unconvertable"
 
-data {-# CLASS "com.ohua.util.Expr$Let" #-} NLetExpr = NLetExpr (Object# NLetExpr) deriving (Class)
+data {-# CLASS "ohua.util.Expr$Let" #-} NLetExpr = NLetExpr (Object# NLetExpr) deriving (Class)
 
 foreign import java "@field Assignment" nLetExprAssignment :: NLetExpr -> NAssignment
 foreign import java "@field value" nLetExprValue :: NLetExpr -> NExpr
 foreign import java "@field body" nLetExprBody :: NLetExpr -> NExpr
 
-data {-# CLASS "com.ohua.util.Expr$Apply" #-} NApplyExpr = NApplyExpr (Object# NApplyExpr) deriving (Class)
+data {-# CLASS "ohua.util.Expr$Apply" #-} NApplyExpr = NApplyExpr (Object# NApplyExpr) deriving (Class)
 
 foreign import java "@field function" nApplyExprFunction :: NApplyExpr -> NExpr
 foreign import java "@field argument" nApplyExprArgument :: NApplyExpr -> NExpr
 
-data {-# CLASS "com.ohua.util.Expr$Var" #-} NVarExpr = NVarExpr (Object# NVarExpr) deriving (Class)
+data {-# CLASS "ohua.util.Expr$Var" #-} NVarExpr = NVarExpr (Object# NVarExpr) deriving (Class)
 
 foreign import java "@field value" nVarExprValue :: NVarExpr -> NResolvedSymbol
 
-data {-# CLASS "com.ohua.util.Expr$Lambda" #-} NLambdaExpr = NLambdaExpr (Object# NLambdaExpr) deriving (Class)
+data {-# CLASS "ohua.util.Expr$Lambda" #-} NLambdaExpr = NLambdaExpr (Object# NLambdaExpr) deriving (Class)
 
 foreign import java "@field Assignment" nLambdaExprAssignment :: NLambdaExpr -> NAssignment
 
@@ -92,16 +92,16 @@ instance NativeConverter Assignment where
 
 foreign import java "@field body" nLambdaExprBody :: NLambdaExpr -> NExpr
 
-data {-# CLASS "com.ohua.util.Assignment" #-} NAssignment = NAssignment (Object# NAssignment) deriving (Class)
-data {-# CLASS "com.ohua.util.Assignment$Direct" #-} NDirectAssignment = NDirectAssignment (Object# NDirectAssignment) deriving (Class)
+data {-# CLASS "ohua.util.Assignment" #-} NAssignment = NAssignment (Object# NAssignment) deriving (Class)
+data {-# CLASS "ohua.util.Assignment$Direct" #-} NDirectAssignment = NDirectAssignment (Object# NDirectAssignment) deriving (Class)
 
 foreign import java "@field binding" nDirectAssignmentBinding :: NDirectAssignment -> NBinding
 
-data {-# CLASS "com.ohua.util.Assignment$Destructure" #-} NDestructureAssignment = NDestructureAssignment (Object# NDestructureAssignment) deriving (Class)
+data {-# CLASS "ohua.util.Assignment$Destructure" #-} NDestructureAssignment = NDestructureAssignment (Object# NDestructureAssignment) deriving (Class)
 
 foreign import java "@field bindings" nDestructureAssignmentBindings :: NDestructureAssignment -> NBindingArr
 
-data {-# CLASS "com.ohua.util.Binding" #-} NBinding = NBinding (Object# NBinding) deriving (Class)
+data {-# CLASS "ohua.util.Binding" #-} NBinding = NBinding (Object# NBinding) deriving (Class)
 
 instance NativeConverter Binding where
     type NativeType Binding = NBinding
@@ -109,11 +109,11 @@ instance NativeConverter Binding where
 
 foreign import java "@field value" nBindingValue :: NBinding -> JString
 
-data {-# CLASS "com.ohua.util.Binding[]" #-} NBindingArr = NBindingArr (Object# NBindingArr) deriving (Class)
+data {-# CLASS "ohua.util.Binding[]" #-} NBindingArr = NBindingArr (Object# NBindingArr) deriving (Class)
 
 instance JArray NBinding NBindingArr
 
-data {-# CLASS "com.ohua.util.ResolvedSymbol" #-} NResolvedSymbol = NResolvedSymbol (Object# NResolvedSymbol) deriving Class
+data {-# CLASS "ohua.util.ResolvedSymbol" #-} NResolvedSymbol = NResolvedSymbol (Object# NResolvedSymbol) deriving Class
 
 instance NativeConverter ResolvedSymbol where
     type NativeType ResolvedSymbol = NResolvedSymbol
@@ -126,23 +126,23 @@ instance NativeConverter ResolvedSymbol where
             (_, _, _, Just v) -> Env $ fromNative $ nEnvBindingId v
             _ -> error "unconvertable"
 
-data {-# CLASS "com.ohua.util.ResolvedSymbol$Local" #-} NLocalBinding = NLocalBinding (Object# NLocalBinding) deriving Class
+data {-# CLASS "ohua.util.ResolvedSymbol$Local" #-} NLocalBinding = NLocalBinding (Object# NLocalBinding) deriving Class
 
 foreign import java "@field binding" nLocalBindingBinding :: NLocalBinding -> NBinding
 
 
-data {-# CLASS "com.ohua.util.ResolvedSymbol$Sf" #-} NSfBinding = NSfBinding (Object# NSfBinding) deriving Class
+data {-# CLASS "ohua.util.ResolvedSymbol$Sf" #-} NSfBinding = NSfBinding (Object# NSfBinding) deriving Class
 
 foreign import java "@field fnName" nSfBindingFnName :: NSfBinding -> NFnName
 foreign import java "@field fnId" nSfBindingId :: NSfBinding -> Maybe JInteger
 
-data {-# CLASS "com.ohua.util.ResolvedSymbol$Env" #-} NEnvBinding = NEnvBinding (Object# NEnvBinding) deriving Class
+data {-# CLASS "ohua.util.ResolvedSymbol$Env" #-} NEnvBinding = NEnvBinding (Object# NEnvBinding) deriving Class
 
 foreign import java "@field id" nEnvBindingId :: NEnvBinding -> JInteger
 
 
 
-data {-# CLASS "com.ohua.util.Target" #-} NTarget = NTarget (Object# NTarget) deriving Class
+data {-# CLASS "ohua.util.Target" #-} NTarget = NTarget (Object# NTarget) deriving Class
 
 instance NativeConverter Target where
     type NativeType Target = NTarget
@@ -150,7 +150,7 @@ instance NativeConverter Target where
 
 foreign import java "@new" newNTarget :: JInteger -> JInteger -> NTarget
 
-data {-# CLASS "com.ohua.util.Graph" #-} NGraph = NGraph (Object# NGraph) deriving Class
+data {-# CLASS "ohua.util.Graph" #-} NGraph = NGraph (Object# NGraph) deriving Class
 
 instance NativeConverter OutGraph where
     type NativeType OutGraph = NGraph
@@ -158,7 +158,7 @@ instance NativeConverter OutGraph where
 
 foreign import java "@new" newNGraph :: NOperatorArr -> NArcArr -> NGraph
 
-data {-# CLASS "com.ohua.util.Operator" #-} NOperator = NOperator (Object# NOperator) deriving Class
+data {-# CLASS "ohua.util.Operator" #-} NOperator = NOperator (Object# NOperator) deriving Class
 
 instance NativeConverter Operator where
     type NativeType Operator = NOperator
@@ -166,26 +166,26 @@ instance NativeConverter Operator where
 
 foreign import java "@new" newNOperator :: JInteger -> JString -> NOperator
 
-data {-# CLASS "com.ohua.util.Operator[]" #-} NOperatorArr = NOperatorArr (Object# NOperatorArr) deriving Class
+data {-# CLASS "ohua.util.Operator[]" #-} NOperatorArr = NOperatorArr (Object# NOperatorArr) deriving Class
 
 instance JArray NOperator NOperatorArr
 
-data {-# CLASS "com.ohua.util.Source" #-} NSource = NSource (Object# NSource) deriving Class
+data {-# CLASS "ohua.util.Source" #-} NSource = NSource (Object# NSource) deriving Class
 
 instance NativeConverter Source where
     type NativeType Source = NSource
     toNative (LocalSource t) = superCast $ newNLocalSource $ toNative t
     toNative (EnvSource e) = superCast $ newNEnvSource $ toNative e
 
-data {-# CLASS "com.ohua.util.Source$Local" #-} NLocalSource = NLocalSource (Object# NLocalSource) deriving Class
+data {-# CLASS "ohua.util.Source$Local" #-} NLocalSource = NLocalSource (Object# NLocalSource) deriving Class
 
 foreign import java "@new" newNLocalSource :: NTarget -> NLocalSource
 
-data {-# CLASS "com.ohua.util.Source$Env" #-} NEnvSource = NEnvSource (Object# NEnvSource) deriving Class
+data {-# CLASS "ohua.util.Source$Env" #-} NEnvSource = NEnvSource (Object# NEnvSource) deriving Class
 
 foreign import java "@new" newNEnvSource :: JInteger -> NEnvSource
 
-data {-# CLASS "com.ohua.util.Arc" #-} NArc = NArc (Object# NArc) deriving Class
+data {-# CLASS "ohua.util.Arc" #-} NArc = NArc (Object# NArc) deriving Class
 
 instance NativeConverter Arc where
     type NativeType Arc = NArc
@@ -193,11 +193,11 @@ instance NativeConverter Arc where
 
 foreign import java "@new" newNArc :: NSource -> NTarget -> NArc
 
-data {-# CLASS "com.ohua.util.Arc[]" #-} NArcArr = NArcArr (Object# NArcArr) deriving Class
+data {-# CLASS "ohua.util.Arc[]" #-} NArcArr = NArcArr (Object# NArcArr) deriving Class
 
 instance JArray NArc NArcArr
 
-data {-# CLASS  "com.ohua.util.FnName" #-} NFnName = NFnName (Object# NFnName) deriving Class
+data {-# CLASS "ohua.util.FnName" #-} NFnName = NFnName (Object# NFnName) deriving Class
 
 instance NativeConverter FnName where
     type NativeType FnName = NFnName

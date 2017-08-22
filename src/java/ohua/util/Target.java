@@ -1,4 +1,4 @@
-package com.ohua.util;
+package ohua.util;
 
 
 public final class Target {
