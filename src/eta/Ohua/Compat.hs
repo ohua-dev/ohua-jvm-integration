@@ -10,6 +10,7 @@ Portability : POSIX
 This source code is licensed under the terms described in the associated LICENSE.TXT file.
 -}
 {-# LANGUAGE ExplicitForAll, ScopedTypeVariables, MagicHash, TypeOperators #-}
+{-# LANGUAGE TypeFamilies, DataKinds #-}
 module Ohua.Compat where
 
 import Java
@@ -21,6 +22,7 @@ import Control.Arrow ((***))
 import qualified Data.HashMap.Strict as HM
 import Ohua.LensClasses
 import Unsafe.Coerce
+import Ohua.DFGraph
 
 data {-# CLASS "clojure.lang.Symbol" #-} Symbol = Symbol (Object# Symbol) deriving Class
 
@@ -119,11 +121,10 @@ instance NativeConverter ResolvedSymbol where
     type NativeType ResolvedSymbol = NResolvedSymbol
 
     fromNative nsym =
-        case (safeDowncast nsym, safeDowncast nsym, safeDowncast nsym, safeDowncast nsym) of
-            (Just v, _, _, _) -> Local $ fromNative $ nLocalBindingBinding v
-            (_, Just v, _, _) -> Sf (fromNative $ nSfBindingFnName v) (fmap fromNative $ nSfBindingId v)
-            (_, _, Just v, _) -> Algo (fromNative $ nAlgoBindingAlgoName v)
-            (_, _, _, Just v) -> Env $ fromNative $ nEnvBindingId v
+        case (safeDowncast nsym, safeDowncast nsym, safeDowncast nsym) of
+            (Just v, _, _) -> Local $ fromNative $ nLocalBindingBinding v
+            (_, Just v, _) -> Sf (fromNative $ nSfBindingFnName v) (fmap fromNative $ nSfBindingId v)
+            (_, _, Just v) -> Env $ fromNative $ nEnvBindingId v
             _ -> error "unconvertable"
 
 data {-# CLASS "ohua.util.ResolvedSymbol$Local" #-} NLocalBinding = NLocalBinding (Object# NLocalBinding) deriving Class
@@ -162,9 +163,9 @@ data {-# CLASS "ohua.util.Operator" #-} NOperator = NOperator (Object# NOperator
 
 instance NativeConverter Operator where
     type NativeType Operator = NOperator
-    toNative (Operator id type) = newNOperator (toNative id) (toNative type)
+    toNative (Operator id t) = newNOperator (toNative id) (toNative t)
 
-foreign import java "@new" newNOperator :: JInteger -> JString -> NOperator
+foreign import java "@new" newNOperator :: JInteger -> NFnName -> NOperator
 
 data {-# CLASS "ohua.util.Operator[]" #-} NOperatorArr = NOperatorArr (Object# NOperatorArr) deriving Class
 
@@ -177,21 +178,24 @@ instance NativeConverter Source where
     toNative (LocalSource t) = superCast $ newNLocalSource $ toNative t
     toNative (EnvSource e) = superCast $ newNEnvSource $ toNative e
 
-data {-# CLASS "ohua.util.Source$Local" #-} NLocalSource = NLocalSource (Object# NLocalSource) deriving Class
 
+data {-# CLASS "ohua.util.Source$Local" #-} NLocalSource = NLocalSource (Object# NLocalSource) deriving Class
+    
+type instance Inherits NLocalSource = '[NSource]
 foreign import java "@new" newNLocalSource :: NTarget -> NLocalSource
 
 data {-# CLASS "ohua.util.Source$Env" #-} NEnvSource = NEnvSource (Object# NEnvSource) deriving Class
 
+type instance Inherits NEnvSource = '[NSource]
 foreign import java "@new" newNEnvSource :: JInteger -> NEnvSource
 
 data {-# CLASS "ohua.util.Arc" #-} NArc = NArc (Object# NArc) deriving Class
 
 instance NativeConverter Arc where
     type NativeType Arc = NArc
-    toNative (Arc source target) = newNArc (toNative source) (toNative target)
+    toNative (Arc target source) = newNArc (toNative target) (toNative source)
 
-foreign import java "@new" newNArc :: NSource -> NTarget -> NArc
+foreign import java "@new" newNArc :: NTarget -> NSource -> NArc
 
 data {-# CLASS "ohua.util.Arc[]" #-} NArcArr = NArcArr (Object# NArcArr) deriving Class
 

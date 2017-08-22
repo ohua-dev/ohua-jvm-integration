@@ -2,10 +2,10 @@ package ohua.util;
 
 
 public final class Arc {
-    public final Source source;
     public final Target target;
+    public final Source source;
 
-    public Arc(final Source source, final Target target) {
+    public Arc(final Target target, final Source source) {
         this.target = target;
         this.source = source;
     }
