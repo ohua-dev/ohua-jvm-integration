@@ -1,5 +1,6 @@
-package ohua.util;
+package ohua.alang;
 
+import ohua.types.*;
 
 public abstract class Assignment {
     public static final class Direct extends Assignment {

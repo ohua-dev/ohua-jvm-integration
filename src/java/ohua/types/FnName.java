@@ -1,4 +1,4 @@
-package ohua.util;
+package ohua.types;
 
 
 public final class FnName {

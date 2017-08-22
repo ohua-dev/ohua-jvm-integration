@@ -1,4 +1,8 @@
-package ohua.util;
+package ohua.alang;
+
+
+import ohua.types.*;
+
 
 public abstract class ResolvedSymbol {
     ResolvedSymbol() {}

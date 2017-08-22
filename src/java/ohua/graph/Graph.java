@@ -1,4 +1,4 @@
-package ohua.util;
+package ohua.graph;
 
 
 public final class Graph {

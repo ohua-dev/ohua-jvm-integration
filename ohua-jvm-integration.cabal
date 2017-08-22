@@ -47,16 +47,16 @@ library
   java-sources:        
     -- It's better not to depend on class files as they are generated
     -- I'd hope at some point we can depend on the clojure source directly
-      src/java/ohua/util/Expr.java
-    , src/java/ohua/util/FnName.java
-    , src/java/ohua/util/ResolvedSymbol.java
-    , src/java/ohua/util/Assignment.java
-    , src/java/ohua/util/Binding.java
-    , src/java/ohua/util/Arc.java
-    , src/java/ohua/util/Graph.java
-    , src/java/ohua/util/Target.java
-    , src/java/ohua/util/Operator.java
-    , src/java/ohua/util/Source.java
+      src/java/ohua/types/FnName.java
+    , src/java/ohua/types/Binding.java
+    , src/java/ohua/alang/Expr.java
+    , src/java/ohua/alang/ResolvedSymbol.java
+    , src/java/ohua/alang/Assignment.java
+    , src/java/ohua/graph/Arc.java
+    , src/java/ohua/graph/Graph.java
+    , src/java/ohua/graph/Target.java
+    , src/java/ohua/graph/Operator.java
+    , src/java/ohua/graph/Source.java
   default-extensions:  
       OverloadedStrings
     , MultiParamTypeClasses
