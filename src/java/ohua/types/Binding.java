@@ -9,7 +9,7 @@ public final class Binding {
     }
 
     public static Binding mk(String value) {
-        if (value.contains("/") || value.contains(" ")) // not comprehensive yet!
+        if (value.contains(" ")) // not comprehensive yet!
             return null;
         else
             return new Binding(value);
