@@ -11,7 +11,7 @@ This source code is licensed under the terms described in the associated LICENSE
 -}
 {-# LANGUAGE ExplicitForAll, ScopedTypeVariables, MagicHash, TypeOperators #-}
 {-# LANGUAGE TypeFamilies, DataKinds #-}
-module Ohua.Compat where
+module Ohua.Compat.JVM.Marshal where
 
 import Java
 import Lens.Micro
@@ -24,6 +24,9 @@ import Ohua.LensClasses
 import Unsafe.Coerce
 import Ohua.DFGraph
 import Ohua.Compile
+import qualified Clojure
+import System.IO.Unsafe
+import Ohua.Compat.JVM.ClojureST
 
 
 instance Show Object where show = fromJString . toString
@@ -222,6 +225,60 @@ instance NativeConverter HostExpr where
     fromNative = HostExpr . fromJava
     toNative = toJava . unwrapHostExpr
 
+
+seqToArr :: Object -> JObjectArray
+seqToArr = unsafeCast . pureJavaWith (Clojure.coreVar "into-array") . Clojure.invoke1
+
+asBool :: Object -> Bool
+asBool = (fromJava :: JBoolean -> Bool) . unsafeCast
+
+asString :: Object -> String
+asString = (fromJava :: JString -> String) . unsafeCast
+
+isSeq :: Object -> Bool
+isSeq = asBool . pureJavaWith (Clojure.coreVar "seq?") . Clojure.invoke1
+
+isSymbol :: Object -> Bool
+isSymbol = asBool . pureJavaWith (Clojure.coreVar "symbol?") . Clojure.invoke1
+
+isVector :: Object -> Bool
+isVector = asBool . pureJavaWith (Clojure.coreVar "vector?") . Clojure.invoke1
+
+cljName :: Object -> String
+cljName = asString . pureJavaWith (Clojure.coreVar "name") . Clojure.invoke1
+
+cljNamespace :: Object -> Maybe String
+cljNamespace = (maybeFromJava :: JString -> Maybe String) . unsafeCast . pureJavaWith (Clojure.coreVar "namespace") . Clojure.invoke1
+
+cljAsSeq :: Object -> Object
+cljAsSeq = pureJavaWith (Clojure.coreVar "seq") . Clojure.invoke1
+
+cljVector :: Object -> Object
+cljVector = pureJavaWith (Clojure.coreVar "vec") . Clojure.invoke1
+
+mkSym :: Symbol -> Object
+mkSym sym = pureJavaWith (Clojure.coreVar "symbol") $
+    case sym of
+        Symbol Nothing name -> Clojure.invoke1 $ convert name
+        Symbol (Just ns) name -> Clojure.invoke2 (convert ns) (convert name)
+  where convert = superCast . (toJava :: String -> JString)
+
+instance NativeConverter ST where
+    type NativeType ST = Object
+    fromNative obj | isSeq obj = Form $ map fromNative $ fromJava $ seqToArr obj
+                   | isSymbol obj = Sym $ Symbol (cljNamespace obj) (cljName obj)
+                   | isVector obj = Vec $ Vector $ map fromNative $ fromJava $ seqToArr obj
+                   | otherwise = Literal obj
+    toNative (Form vals) = cljAsSeq $ (superCast :: JObjectArray -> Object) $ toJava $ map toNative vals
+    toNative (Sym sym) = mkSym sym
+    toNative (Vec v) = cljVector $ (superCast :: JObjectArray -> Object) $ toJava $ map toNative $ vectorToList v
+    toNative (Literal o) = o
+
+instance ToEnvExpr Symbol where
+    toEnvExpr = mkSym
+
+instance ToEnvExpr Vector where
+    toEnvExpr = cljVector . (superCast :: JObjectArray -> Object) . toJava . map toNative . vectorToList
 
 data {-# CLASS "ohua.Compiler" #-} NCompiler = NCompiler (Object# NCompiler) deriving Class
 

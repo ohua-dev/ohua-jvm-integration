@@ -45,28 +45,46 @@
     [thing]
     thing))
 
-(defn convert-expr [binding-gen env-exprs _scope expr]
-  (let [scope (atom _scope)
-        go #(convert-expr binding-gen env-exprs @scope %)
-        add-to-scope (fn [bnds] (swap! scope set/union (set bnds)))
+(defn get-used-names [form]
+)
+
+(defn convert-expr [binding-gen env-exprs scope expr]
+  (let [go0 #(convert-expr binding-gen env-exprs %1 %2) 
+        go #(go0 scope %)
+        add-to-scope (fn [scope bnds] (set/union scope (set bnds)))
         register-env-expr (fn [e]
                             (let [d @env-exprs]
                               (if (compare-and-set! env-exprs d (conj d e))
                                 (count d)
                                 (recur e))))
-        handle-statements 
-        (fn [seq]
-          ((apply comp (map (fn [e] (fn [e2] (Expr$Let. (Assignment$Direct. (binding-gen)) (go e) e2))) (butlast expr))) (go (last expr))))]
+        handle-statements
+        (fn [scope expr]
+          (let [f (reduce 
+                    (fn [f form]
+                      #(f (Expr$Let. (Assignment$Direct. (binding-gen)) (go0 scope form) %)))
+                    identity
+                    (butlast expr))]
+            (f (go0 scope (last expr)))))
+        handle-binds
+        (fn []
+          (reduce
+            (fn [[f scope] [bnd val]]
+              (let [scope0 (add-to-scope scope (flatten-assign bnd))]
+                [#(f (Expr$Let. (handle-destructure bnd) (go0 scope0 val) %)) scope0]))
+            [identity scope]
+            (partition 2 (second expr))))]
     (cond
       (seq? expr) 
         (case (first expr)
-          let ((apply comp (map (fn [[bnd val]] (fn [e] (add-to-scope (flatten-assign bnd)) (Expr$Let. (handle-destructure bnd) (go val) e))) (partition 2 (second expr)))) (handle-statements (drop 2 expr)))
-          fn (do (add-to-scope (second expr)) ((mk-lams (second expr)) (handle-statements (drop 2 expr))))
+          let (let [[f scope] (handle-binds)]
+                (f (handle-statements scope (drop 2 expr))))
+          fn  (let [scope0 (add-to-scope scope (mapcat flatten-assign (second expr)))] 
+                ((mk-lams (second expr)) (handle-statements scope0 (drop 2 expr))))
           (case (count expr)
             0 (throw (Exception. "Empty sequence"))
             1 (go (first expr))
             (Expr$Apply. (go (butlast expr)) (go (last expr)))))
-      (symbol? expr) (Expr$Var. (if (@scope expr) 
+      (symbol? expr) (Expr$Var. (if (scope expr) 
                                   (ResolvedSymbol$Local. (->bnd expr)) 
                                   (let [[type full-name] (resolve-type expr)]
                                     (case type
@@ -77,7 +95,7 @@
 
 (defn clj->alang [form]
   (let [env-exprs (atom [])
-        taken #{}
+        taken (get-used-names form)
         binding-gen (let [possible-names (for [dig (cons "" (iterate inc 0)) chr (map (comp str char) (range 97 123))]
                                             (str chr dig))
                           gen (atom (remove taken possible-names))]

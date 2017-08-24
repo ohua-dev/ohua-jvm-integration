@@ -25,7 +25,10 @@ library
     --   Ohua.IR.Transform
     -- , Ohua.IR.Transform.Pmap
     -- , Ohua.IR.Transform.DeadCodeElimination
-    Ohua.Compat
+      Clojure
+    , Ohua.Compat.JVM.Marshal
+    , Ohua.Compat.JVM.ClojureST
+    , Ohua.Compat.JVM.ToALang
 
   -- other-modules:
   -- other-extensions:
@@ -68,6 +71,8 @@ library
     , LambdaCase
   if flag(debug)
     cpp-options: -DDEBUG=1
+  maven-depends:
+    org.clojure:clojure:1.8.0
 
 -- test-suite ouha-test
 --  main-is:             Spec.hs

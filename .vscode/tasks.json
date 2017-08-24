@@ -10,7 +10,58 @@
             "group": {
                 "kind": "build",
                 "isDefault": true
-            }
+            },
+            "problemMatcher": [
+                {
+                    "owner": "haskell",
+                    "fileLocation": "absolute",
+                    "pattern": [
+                        {
+                            // warnings
+                            "regexp": "(.+?):(\\d+):(\\d+):\\s(Warning):\\s*$",
+                            "file": 1,
+                            "line": 2,
+                            "column": 3,
+                            "severity": 4
+                        },
+                        {
+                            "regexp": "^\\s+(.+)",
+                            "message": 1
+                        }
+                    ]
+                },
+                {
+                    "owner": "haskell",
+                    "fileLocation": "relative",
+                    "pattern": [
+                        {
+                            // regular errors
+                            "regexp": "(.+?):(\\d+):(\\d+):\\s*$",
+                            "file": 1,
+                            "line": 2,
+                            "column": 3
+                        },
+                        {
+                            "regexp": "^\\s+(.+)",
+                            "message": 1
+                        }
+                    ]
+                },
+                {
+                    "owner": "haskell",
+                    "fileLocation": "absolute",
+                    "pattern": [
+                        {
+                            // regular errors
+                            "regexp": "(.+?):(\\d+):(\\d+): (Not in scope: .*)$",
+                            "file": 1,
+                            "line": 2,
+                            "column": 3,
+                            "message": 4
+                        }
+                    ]
+                }
+            ]
         }
     ]
 }
