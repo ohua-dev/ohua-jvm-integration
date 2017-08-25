@@ -81,7 +81,7 @@ toALang st = (\(a, s, ()) -> (a, s)) <$> runRWST (go st) mempty mempty
 symToBinding :: Symbol -> Binding
 symToBinding = Binding . \case 
     Symbol Nothing name -> name
-    Symbol (Just ns) name -> ns ++ "/" ++ name
+    Symbol (Just ns) name -> ns <> "/" <> name
 
 
 definedBindings :: ST -> HS.HashSet Binding

@@ -3,6 +3,7 @@ module Ohua.Compat.JVM.ClojureST where
 
 import Java
 import Data.Hashable
+import qualified Data.Text as T
 
 
 data ST 
@@ -13,8 +14,8 @@ data ST
 
 
 data Symbol = Symbol 
-    { namespace :: Maybe String 
-    , name :: String
+    { namespace :: Maybe T.Text 
+    , name :: T.Text
     } deriving Eq
 
 newtype Vector = Vector { vectorToList :: [ST] }

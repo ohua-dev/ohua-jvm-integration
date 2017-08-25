@@ -27,6 +27,7 @@ import Ohua.Compile
 import qualified Clojure
 import System.IO.Unsafe
 import Ohua.Compat.JVM.ClojureST
+import qualified Data.Text as T
 
 
 instance Show Object where show = fromJString . toString
@@ -35,6 +36,12 @@ class NativeConverter a where
     type NativeType a
     fromNative :: NativeType a -> a
     toNative :: a -> NativeType a
+
+
+instance NativeConverter T.Text where
+    type NativeType T.Text = JString
+    fromNative = T.pack . fromJava
+    toNative = toJava . T.unpack
 
 
 type CljExpr = Object
@@ -118,11 +125,11 @@ data {-# CLASS "ohua.types.Binding" #-} NBinding = NBinding (Object# NBinding) d
 
 instance NativeConverter Binding where
     type NativeType Binding = NBinding
-    fromNative nbind = Binding (nBindingValue nbind)
-    toNative (Binding str) = newBinding str
+    fromNative nbind = Binding (fromNative $ nBindingValue nbind)
+    toNative (Binding str) = newBinding $ toNative str
 
-foreign import java "@field value" nBindingValue :: NBinding -> String
-foreign import java "@new" newBinding :: String -> NBinding
+foreign import java "@field value" nBindingValue :: NBinding -> JString
+foreign import java "@new" newBinding :: JString -> NBinding
 
 data {-# CLASS "ohua.types.Binding[]" #-} NBindingArr = NBindingArr (Object# NBindingArr) deriving (Class)
 
@@ -247,8 +254,8 @@ seqToArr = unsafeCast . pureJavaWith (Clojure.coreVar "into-array") . Clojure.in
 asBool :: Object -> Bool
 asBool = (fromJava :: JBoolean -> Bool) . unsafeCast
 
-asString :: Object -> String
-asString = (fromJava :: JString -> String) . unsafeCast
+asString :: Object -> T.Text
+asString = (fromNative :: JString -> T.Text) . unsafeCast
 
 isSeq :: Object -> Bool
 isSeq = asBool . pureJavaWith (Clojure.coreVar "seq?") . Clojure.invoke1
@@ -259,11 +266,11 @@ isSymbol = asBool . pureJavaWith (Clojure.coreVar "symbol?") . Clojure.invoke1
 isVector :: Object -> Bool
 isVector = asBool . pureJavaWith (Clojure.coreVar "vector?") . Clojure.invoke1
 
-cljName :: Object -> String
+cljName :: Object -> T.Text
 cljName = asString . pureJavaWith (Clojure.coreVar "name") . Clojure.invoke1
 
-cljNamespace :: Object -> Maybe String
-cljNamespace = (maybeFromJava :: JString -> Maybe String) . unsafeCast . pureJavaWith (Clojure.coreVar "namespace") . Clojure.invoke1
+cljNamespace :: Object -> Maybe T.Text
+cljNamespace = fmap T.pack . (maybeFromJava :: JString -> Maybe String) . unsafeCast . pureJavaWith (Clojure.coreVar "namespace") . Clojure.invoke1
 
 cljAsSeq :: Object -> Object
 cljAsSeq = pureJavaWith (Clojure.coreVar "seq") . Clojure.invoke1
@@ -276,7 +283,7 @@ mkSym sym = pureJavaWith (Clojure.coreVar "symbol") $
     case sym of
         Symbol Nothing name -> Clojure.invoke1 $ convert name
         Symbol (Just ns) name -> Clojure.invoke2 (convert ns) (convert name)
-  where convert = superCast . (toJava :: String -> JString)
+  where convert = superCast . (toNative :: T.Text -> JString)
 
 instance NativeConverter ST where
     type NativeType ST = Object
