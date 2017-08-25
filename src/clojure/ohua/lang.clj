@@ -121,9 +121,7 @@
 
 
 (defn eval-and-print [expr]
-  (let [[alang envs] (clj->alang expr)]
-    (println (alang->str alang))
-    (println envs)))
+  (ohua.Compiler/testToALang expr))
 
 
 (defmacro defalgo []

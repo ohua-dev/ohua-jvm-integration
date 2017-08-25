@@ -44,7 +44,6 @@ not_implemented = error "This function is not (yet) implemented"
 
 data {-# CLASS "com.ohua.alang.Expr" #-} NExpr = NExpr (Object# NExpr) deriving (Class)
 
-
 instance NativeConverter Expression where
     type NativeType Expression = NExpr
     fromNative nexpr =
@@ -59,26 +58,50 @@ instance NativeConverter Expression where
                     (fromNative $ nLetExprValue let_)
                     (fromNative $ nLetExprBody let_)
             _ -> error "unconvertable"
-    toNative = not_implemented
+    toNative (Let bnd val body) = superCast $ newLetExpr (toNative bnd) (toNative val) (toNative body)
+    toNative (Lambda assign body) = superCast $ newLambdaExpr (toNative assign) (toNative body)
 
 data {-# CLASS "ohua.alang.Expr$Let" #-} NLetExpr = NLetExpr (Object# NLetExpr) deriving (Class)
+type instance Inherits NLetExpr = '[NExpr]
 
 foreign import java "@field Assignment" nLetExprAssignment :: NLetExpr -> NAssignment
 foreign import java "@field value" nLetExprValue :: NLetExpr -> NExpr
 foreign import java "@field body" nLetExprBody :: NLetExpr -> NExpr
+foreign import java "@new" newLetExpr :: NAssignment -> NExpr -> NExpr -> NLetExpr
 
 data {-# CLASS "ohua.alang.Expr$Apply" #-} NApplyExpr = NApplyExpr (Object# NApplyExpr) deriving (Class)
+type instance Inherits NApplyExpr = '[NExpr]
 
 foreign import java "@field function" nApplyExprFunction :: NApplyExpr -> NExpr
 foreign import java "@field argument" nApplyExprArgument :: NApplyExpr -> NExpr
+foreign import java "@new" newApplyExpr :: NExpr -> NExpr -> NApplyExpr
 
 data {-# CLASS "ohua.alang.Expr$Var" #-} NVarExpr = NVarExpr (Object# NVarExpr) deriving (Class)
+type instance Inherits NVarExpr = '[NExpr]
 
 foreign import java "@field value" nVarExprValue :: NVarExpr -> NResolvedSymbol
+foreign import java "@new" newVarExpr :: NResolvedSymbol -> NVarExpr
 
 data {-# CLASS "ohua.alang.Expr$Lambda" #-} NLambdaExpr = NLambdaExpr (Object# NLambdaExpr) deriving (Class)
+type instance Inherits NLambdaExpr = '[NExpr]
 
 foreign import java "@field Assignment" nLambdaExprAssignment :: NLambdaExpr -> NAssignment
+foreign import java "@field body" nLambdaExprBody :: NLambdaExpr -> NExpr
+foreign import java "@new" newLambdaExpr :: NAssignment -> NExpr -> NLambdaExpr
+
+data {-# CLASS "ohua.alang.Assignment" #-} NAssignment = NAssignment (Object# NAssignment) deriving (Class)
+data {-# CLASS "ohua.alang.Assignment$Direct" #-} NDirectAssignment = NDirectAssignment (Object# NDirectAssignment) deriving (Class)
+type instance Inherits NDirectAssignment = '[NAssignment]
+
+foreign import java "@field binding" nDirectAssignmentBinding :: NDirectAssignment -> NBinding
+foreign import java "@new" newDirectAssignment :: NBinding -> NDirectAssignment
+
+data {-# CLASS "ohua.alang.Assignment$Destructure" #-} NDestructureAssignment = NDestructureAssignment (Object# NDestructureAssignment) deriving (Class)
+type instance Inherits NDestructureAssignment = '[NAssignment]
+
+foreign import java "@field bindings" nDestructureAssignmentBindings :: NDestructureAssignment -> NBindingArr
+foreign import java "@new" newDestructureAssignment :: NBindingArr -> NDestructureAssignment
+
 
 instance NativeConverter Assignment where
     type NativeType Assignment = NAssignment
@@ -87,27 +110,19 @@ instance NativeConverter Assignment where
             (Just dir, _) -> Direct $ fromNative $ nDirectAssignmentBinding dir
             (_, Just destr) -> Destructure $ map fromNative $ fromJava (destr :: NBindingArr)
             _ -> error "unconvertable"
-    toNative = not_implemented
+    toNative (Direct bnd) = superCast $ newDirectAssignment $ toNative bnd
+    toNative (Destructure bnds) = superCast $ newDestructureAssignment $ toJava $ map toNative bnds
             
-foreign import java "@field body" nLambdaExprBody :: NLambdaExpr -> NExpr
-
-data {-# CLASS "ohua.alang.Assignment" #-} NAssignment = NAssignment (Object# NAssignment) deriving (Class)
-data {-# CLASS "ohua.alang.Assignment$Direct" #-} NDirectAssignment = NDirectAssignment (Object# NDirectAssignment) deriving (Class)
-
-foreign import java "@field binding" nDirectAssignmentBinding :: NDirectAssignment -> NBinding
-
-data {-# CLASS "ohua.alang.Assignment$Destructure" #-} NDestructureAssignment = NDestructureAssignment (Object# NDestructureAssignment) deriving (Class)
-
-foreign import java "@field bindings" nDestructureAssignmentBindings :: NDestructureAssignment -> NBindingArr
 
 data {-# CLASS "ohua.types.Binding" #-} NBinding = NBinding (Object# NBinding) deriving (Class)
 
 instance NativeConverter Binding where
     type NativeType Binding = NBinding
-    fromNative nbind = Binding (fromJava $ nBindingValue nbind)
-    toNative = not_implemented
+    fromNative nbind = Binding (nBindingValue nbind)
+    toNative (Binding str) = newBinding str
 
-foreign import java "@field value" nBindingValue :: NBinding -> JString
+foreign import java "@field value" nBindingValue :: NBinding -> String
+foreign import java "@new" newBinding :: String -> NBinding
 
 data {-# CLASS "ohua.types.Binding[]" #-} NBindingArr = NBindingArr (Object# NBindingArr) deriving (Class)
 
@@ -280,11 +295,3 @@ instance ToEnvExpr Symbol where
 instance ToEnvExpr Vector where
     toEnvExpr = cljVector . (superCast :: JObjectArray -> Object) . toJava . map toNative . vectorToList
 
-data {-# CLASS "ohua.Compiler" #-} NCompiler = NCompiler (Object# NCompiler) deriving Class
-
-
-nativeCompile :: NExpr -> Java NCompiler NGraph
-nativeCompile = return . toNative . either error id . compile . fromNative
-
-
-foreign export java "@static ohua.Compiler.compile" nativeCompile :: NExpr -> Java NCompiler NGraph

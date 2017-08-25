@@ -12,4 +12,5 @@
   :dependencies [[org.clojure/clojure "1.8.0"]]
   :source-paths ["src/clojure"]
   :java-source-paths ["src/java"]
+  :resource-paths ["dist/build/ohua-dummy-main/ohua-dummy-main.jar"]
   )

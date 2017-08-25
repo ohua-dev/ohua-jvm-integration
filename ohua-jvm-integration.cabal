@@ -29,6 +29,7 @@ library
     , Ohua.Compat.JVM.Marshal
     , Ohua.Compat.JVM.ClojureST
     , Ohua.Compat.JVM.ToALang
+    , Ohua.Compat.JVM.Compiler
 
   -- other-modules:
   -- other-extensions:
@@ -88,3 +89,8 @@ library
 --  type:                exitcode-stdio-1.0
 --  default-extensions:  OverloadedStrings
 
+executable ohua-dummy-main
+  hs-source-dirs: app
+  main-is: DummyMain.hs
+  default-language: Haskell2010
+  build-depends: base, ohua-jvm-integration, ohua-core
