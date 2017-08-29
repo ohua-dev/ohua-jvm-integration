@@ -94,4 +94,4 @@ executable ohua-dummy-main
   hs-source-dirs: app
   main-is: DummyMain.hs
   default-language: Haskell2010
-  build-depends: base, ohua-jvm-integration, ohua-core
+  build-depends: base, ohua-jvm-integration, ohua-core, mtl

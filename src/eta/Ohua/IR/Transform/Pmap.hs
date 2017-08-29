@@ -253,7 +253,7 @@ instance NativeConverter PmapInput where
             , let [nativeId, nativeWidth] = fromJava coll
             ]
 
-    toNative = undefined -- No implementation needed as this is never called for this type (for now)
+    toNative = error "is it this?" -- No implementation needed as this is never called for this type (for now)
 
 
 transform :: PmapInput -> PmapTransformer ()

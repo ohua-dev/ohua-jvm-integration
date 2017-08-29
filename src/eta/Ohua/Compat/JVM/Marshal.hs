@@ -28,6 +28,7 @@ import qualified Clojure
 import System.IO.Unsafe
 import Ohua.Compat.JVM.ClojureST
 import qualified Data.Text as T
+import Debug.Trace
 
 
 instance Show Object where show = fromJString . toString
@@ -287,7 +288,9 @@ mkSym sym = pureJavaWith (Clojure.coreVar "symbol") $
 
 instance NativeConverter ST where
     type NativeType ST = Object
-    fromNative obj | isSeq obj = Form $ map fromNative $ fromJava $ seqToArr obj
+    fromNative obj = trace "called fromNative" result
+    
+      where result | isSeq obj = Form $ map fromNative $ fromJava $ seqToArr obj
                    | isSymbol obj = Sym $ Symbol (cljNamespace obj) (cljName obj)
                    | isVector obj = Vec $ Vector $ map fromNative $ fromJava $ seqToArr obj
                    | otherwise = Literal obj

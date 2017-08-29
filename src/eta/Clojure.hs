@@ -1,8 +1,9 @@
-{-# LANGUAGE MagicHash #-}
+{-# LANGUAGE MagicHash, BangPatterns #-}
 module Clojure where
 
 import Java
 import System.IO.Unsafe
+import System.IO
 
 data {-# CLASS "clojure.lang.IFn" #-} IFn = IFn (Object# IFn) deriving Class
 
@@ -34,4 +35,8 @@ foreign import java "@static clojure.java.api.Clojure.var" var :: String -> IO I
 foreign import java "@static clojure.java.api.Clojure.read" read :: String -> IO Object
 
 coreVar :: String -> IFn
-coreVar = unsafePerformIO . varNS "clojure.core"
+coreVar v = unsafePerformIO $ do 
+    hPutStrLn stderr $ "Getting core function \'" ++ v ++ "\'"
+    !f <- varNS "clojure.core" v
+    hPutStrLn stderr "done"
+    return f
