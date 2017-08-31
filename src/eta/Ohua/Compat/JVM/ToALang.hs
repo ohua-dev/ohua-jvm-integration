@@ -12,6 +12,7 @@ import Control.Monad.Except
 import Ohua.Types
 import Control.Monad.RWS
 import Control.Monad.Writer
+import Data.Foldable
 import Java
 
 
@@ -45,6 +46,9 @@ toALang st = (\(a, s, ()) -> (a, s)) <$> runRWST (go st) mempty mempty
                 assigns <- mapM handleAssign (vectorToList v)
                 ($) <$> mkLams assigns <*> local (HS.union $ HS.fromList $ assigns >>= flattenAssign) (handleStatements statements)
             _ -> throwError "Exprected binding vector"
+    go (Form list) = do
+        (fn:rest) <- mapM go list
+        return $ foldl' (\e v -> e `Apply` v) fn rest
         
     mkLams [] = Lambda . Direct <$> generateBindingWith "_"
     mkLams more = return $ foldl (.) id $ map Lambda more

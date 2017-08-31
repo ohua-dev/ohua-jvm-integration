@@ -29,7 +29,7 @@ foreign import java "getClass" getClass_ :: Java Object (JClass Object)
 
 
 main = do 
-    !r <- Clojure.read "a"
+    !r <- Clojure.read "(let [a (print b)] a)"
     let converted = fromNative r
     hPutStrLn stderr $ fromJava $ toString r
     converted `deepseq` return ()    
@@ -47,14 +47,8 @@ main = do
     let !bnds = definedBindings converted
 
     !c <- runExceptT $ flip runOhuaT0 bnds $ do
-        liftIO $ hPutStrLn stderr $ "Running actual compiler"
         !alang <- toALang converted
-        liftIO $ hPutStrLn stderr $ "Converted to alang"
         !p <- pipeline $ fst alang
-        liftIO $ hPutStrLn stderr $ "Ran pipeline"
         return p
-    hPutStrLn stderr "I'm done compiling"
     let !native = toNative $ either error id c
-    hPutStrLn stderr "I converted to native"
     putStrLn $ fromJava $ toString native
-    hPutStrLn stderr "done"
