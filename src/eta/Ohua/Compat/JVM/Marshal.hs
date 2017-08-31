@@ -10,7 +10,7 @@ Portability : POSIX
 This source code is licensed under the terms described in the associated LICENSE.TXT file.
 -}
 {-# LANGUAGE ExplicitForAll, ScopedTypeVariables, MagicHash, TypeOperators #-}
-{-# LANGUAGE TypeFamilies, DataKinds #-}
+{-# LANGUAGE TypeFamilies, DataKinds, BangPatterns #-}
 module Ohua.Compat.JVM.Marshal where
 
 import Java
@@ -26,10 +26,9 @@ import Ohua.DFGraph
 import Ohua.Compile
 import qualified Clojure
 import System.IO.Unsafe
+import System.IO
 import Ohua.Compat.JVM.ClojureST
 import qualified Data.Text as T
-import Debug.Trace
-
 
 instance Show Object where show = fromJString . toString
 
@@ -248,18 +247,14 @@ instance NativeConverter HostExpr where
     fromNative = HostExpr . fromJava
     toNative = toJava . unwrapHostExpr
 
-
-seqToArr :: Object -> JObjectArray
-seqToArr = unsafeCast . pureJavaWith (Clojure.coreVar "into-array") . Clojure.invoke1
-
 asBool :: Object -> Bool
-asBool = (fromJava :: JBoolean -> Bool) . unsafeCast
+asBool !o = (fromJava :: JBoolean -> Bool) . unsafeCast $ o
 
 asString :: Object -> T.Text
 asString = (fromNative :: JString -> T.Text) . unsafeCast
 
 isSeq :: Object -> Bool
-isSeq = asBool . pureJavaWith (Clojure.coreVar "seq?") . Clojure.invoke1
+isSeq o = asBool $ pureJavaWith (Clojure.coreVar "seq?") $ Clojure.invoke1 o
 
 isSymbol :: Object -> Bool
 isSymbol = asBool . pureJavaWith (Clojure.coreVar "symbol?") . Clojure.invoke1
@@ -286,17 +281,21 @@ mkSym sym = pureJavaWith (Clojure.coreVar "symbol") $
         Symbol (Just ns) name -> Clojure.invoke2 (convert ns) (convert name)
   where convert = superCast . (toNative :: T.Text -> JString)
 
+trace str a = unsafeDupablePerformIO $ do
+    hPutStrLn stderr str
+    return a
+
 instance NativeConverter ST where
     type NativeType ST = Object
-    fromNative obj = trace "called fromNative" result
-    
-      where result | isSeq obj = Form $ map fromNative $ fromJava $ seqToArr obj
+    fromNative obj | isSeq obj = Form asSeq
                    | isSymbol obj = Sym $ Symbol (cljNamespace obj) (cljName obj)
-                   | isVector obj = Vec $ Vector $ map fromNative $ fromJava $ seqToArr obj
+                   | isVector obj = Vec $ Vector asSeq
                    | otherwise = Literal obj
-    toNative (Form vals) = cljAsSeq $ (superCast :: JObjectArray -> Object) $ toJava $ map toNative vals
+      where 
+        asSeq = map fromNative $ fromJava $ (unsafeCast :: Object -> Collection Object) obj
+    toNative (Form vals) = cljAsSeq $ (superCast :: Collection Object -> Object) $ toJava $ map toNative vals
     toNative (Sym sym) = mkSym sym
-    toNative (Vec v) = cljVector $ (superCast :: JObjectArray -> Object) $ toJava $ map toNative $ vectorToList v
+    toNative (Vec v) = cljVector $ (superCast :: Collection Object -> Object) $ toJava $ map toNative $ vectorToList v
     toNative (Literal o) = o
 
 instance ToEnvExpr Symbol where

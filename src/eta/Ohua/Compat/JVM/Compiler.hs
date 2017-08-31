@@ -8,7 +8,6 @@ import Ohua.Monad
 import Ohua.Compat.JVM.ToALang
 import Ohua.Compat.JVM.Marshal
 import Data.Foldable
-import Debug.Trace
 
 
 
@@ -22,7 +21,7 @@ nativeCompile = toNative . either error id . compile . fromNative
 
 
 nativeToAlang :: Object -> IO ()
-nativeToAlang = either error (\(alang, objects) -> print alang >> print (toList objects)) . (\st -> runOhuaT0 (toALang st) (definedBindings st)) . trace "converted" . fromNative
+nativeToAlang = either error (\(alang, objects) -> print alang >> print (toList objects)) . (\st -> runOhuaT0 (toALang st) (definedBindings st)) . fromNative
 
 
 foreign export java "@static ohua.Compiler.compile" nativeCompile :: Object -> NGraph
