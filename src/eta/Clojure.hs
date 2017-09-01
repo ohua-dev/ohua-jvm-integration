@@ -31,9 +31,9 @@ foreign import java "@interface invoke" invoke19 :: Object -> Object -> Object -
 foreign import java "@interface invoke" invoke20 :: Object -> Object -> Object -> Object -> Object -> Object -> Object -> Object -> Object -> Object -> Object -> Object -> Object -> Object -> Object -> Object -> Object -> Object -> Object -> Object -> Java IFn Object
 foreign import java "@interface invoke" invoke :: Object -> Object -> Object -> Object -> Object -> Object -> Object -> Object -> Object -> Object -> Object -> Object -> Object -> Object -> Object -> Object -> Object -> Object -> Object -> Object -> JObjectArray -> Java IFn Object
 
-foreign import java "@static clojure.java.api.Clojure.var" mVarNS :: Object -> Object -> IO (Maybe IFn)
-foreign import java "@static clojure.java.api.Clojure.var" mVar :: Object -> IO (Maybe IFn)
-foreign import java "@static clojure.java.api.Clojure.read" mRead :: String -> IO (Maybe Object)
+foreign import java unsafe "@static clojure.java.api.Clojure.var" mVarNS :: Object -> Object -> IO (Maybe IFn)
+foreign import java unsafe "@static clojure.java.api.Clojure.var" mVar :: Object -> IO (Maybe IFn)
+foreign import java unsafe "@static clojure.java.api.Clojure.read" mRead :: String -> IO (Maybe Object)
 
 varNS :: String -> String -> IO IFn
 varNS name namespace = fromMaybe (error $ "Var not found: " ++ name ++ "/" ++ namespace) <$> mVarNS (strToObj name) (strToObj namespace)

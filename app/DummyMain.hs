@@ -13,6 +13,8 @@ import System.IO
 import Control.Monad.Except
 import Ohua.Compat.JVM.ClojureST
 import Control.DeepSeq
+import Registry
+
 
 
 deriving instance Show OutGraph
@@ -25,19 +27,16 @@ deriving instance Show Vector
 deriving instance Show Symbol
 
 
-foreign import java "getClass" getClass_ :: Java Object (JClass Object)
-
-
 main = do 
     !r <- Clojure.read "(let [a (print b)] a)"
     let converted = fromNative r
-    let reg = SfRegistry ["some.module/print"] [("print", "some.module/print")]
+    let reg = simpleRegistry ["some.module/print"] [("print", "some.module/print")]
     hPutStrLn stderr $ fromJava $ toString r
     converted `deepseq` return ()    
     hPutStrLn stderr $ show converted
 
     let !bnds = definedBindings converted
-    c <- runExceptT $ flip runOhuaT0 bnds $ toALang converted
+    c <- flip runOhuaT0 bnds $ toALang reg converted
     print c
 
     -- let !bnds = definedBindings converted

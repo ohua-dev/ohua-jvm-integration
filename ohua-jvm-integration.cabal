@@ -91,12 +91,15 @@ library
 --  default-extensions:  OverloadedStrings
 
 executable ohua-dummy-main
-  hs-source-dirs: app
+  hs-source-dirs: app, utils
   main-is: DummyMain.hs
+  other-modules: Registry
   default-language: Haskell2010
   build-depends: 
       base
     , ohua-jvm-integration
     , ohua-core
     , mtl
+    , unordered-containers
+    , text
     , deepseq==1.4.2.0

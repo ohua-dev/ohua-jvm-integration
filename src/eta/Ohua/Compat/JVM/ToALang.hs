@@ -17,6 +17,8 @@ import Data.Foldable
 import Java
 import Lens.Micro
 import Control.Category hiding ((.), id)
+import Ohua.Util
+import qualified Data.Text as T
 
 
 class HasDeclaredSymbols s where
@@ -69,25 +71,29 @@ isSf b' = asks $ (^. sfRegistry) >>> \(SfRegistry qual unqual) ->
   where b = toBinding b'
 
 
-toALang :: (MonadError String m, MonadOhua m) => SfRegistry -> ST -> m (Expression, Seq Object)
+toALang :: MonadOhua m => SfRegistry -> ST -> m (Expression, Seq Object)
 toALang reg st = (\(a, s, ()) -> (a, s)) <$> runRWST (go st) (noDeclaredSymbols, reg, ()) mempty
   where
     go (Literal o) = Var <$> toEnvRef o
     go (Sym s) = do
         isLocal <- isDefined s
-        Var <$> if isLocal then return (Local $ symToBinding s) else toEnvRef s
+        Var <$> 
+            if isLocal then 
+                return (Local $ symToBinding s) 
+            else 
+                isSf s >>= maybe (toEnvRef s) (fmap (`Sf` Nothing) . bndToFnName)
     go (Vec v) = Var <$> toEnvRef v
-    go (Form []) = throwError "Empty form"
+    go (Form []) = failWith "Empty form"
     go (Form (Sym l:rest)) | l == letSym =
         case rest of
             Vec v:statements -> handleLet (handleStatements statements) (partition 2 $ vectorToList v)
-            _ -> throwError "Expected binding vector"
+            _ -> failWith "Expected binding vector"
     go (Form (Sym fn:rest)) | fn == fnSym =
         case rest of
             Vec v:statements -> do 
                 assigns <- mapM handleAssign (vectorToList v)
                 ($) <$> mkLams assigns <*> registerBnds (assigns >>= flattenAssign) (handleStatements statements)
-            _ -> throwError "Exprected binding vector"
+            _ -> failWith "Exprected binding vector"
     go (Form list) = do
         (fn:rest) <- mapM go list
         return $ foldl' (\e v -> e `Apply` v) fn rest
@@ -101,17 +107,17 @@ toALang reg st = (\(a, s, ()) -> (a, s)) <$> runRWST (go st) (noDeclaredSymbols,
         go' ([assign, val]:rest) = do
             assign' <- handleAssign assign
             registerAssign assign' $ Let assign' <$> go val <*> go' rest
-        go' _ = throwError "Expected two element sequence"
+        go' _ = failWith "Expected two element sequence"
 
 
     handleAssign (Sym s) = return $ Direct $ symToBinding s
     handleAssign (Vec v) = Destructure <$> mapM expectSym (vectorToList v)
-    handleAssign _ = throwError "Invalid type of assignment"
+    handleAssign _ = failWith "Invalid type of assignment"
     
     expectSym (Sym s) = return $ symToBinding s
-    expectSym _ = throwError "Expected symbol"
+    expectSym _ = failWith "Expected symbol"
 
-    handleStatements [] = throwError "Expected at least one return form in"
+    handleStatements [] = failWith "Expected at least one return form in"
     handleStatements [x] = go x
     handleStatements (stmt:rest) = Let <$> (Direct <$> generateBindingWith "_") <*> go stmt <*> handleStatements rest
 
@@ -123,6 +129,15 @@ toALang reg st = (\(a, s, ()) -> (a, s)) <$> runRWST (go st) (noDeclaredSymbols,
     registerBnds bnds = local (declaredSymbols %~ DeclaredSymbols . HS.union (HS.fromList bnds) . unwrapDeclaredSymbols)
     registerAssign assign = registerBnds $ flattenAssign assign
 
+
+
+
+bndToFnName :: MonadOhua m => Binding -> m FnName
+bndToFnName (Binding b) = 
+    case symbolFromString b of
+        Left err -> failWith $ T.pack err
+        Right (Right _) -> failWith $ "Could not convert " <> showT b <> " to function name"
+        Right (Left fnName) -> return fnName
 
 
 symToBinding :: Symbol -> Binding
