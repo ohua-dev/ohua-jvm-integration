@@ -67,6 +67,8 @@ instance NativeConverter Expression where
             _ -> error "unconvertable"
     toNative (Let bnd val body) = superCast $ newLetExpr (toNative bnd) (toNative val) (toNative body)
     toNative (Lambda assign body) = superCast $ newLambdaExpr (toNative assign) (toNative body)
+    toNative (Apply assign body) = superCast $ newApplyExpr (toNative assign) (toNative body)
+    toNative (Var v) = superCast $ newVarExpr $ toNative v
 
 data {-# CLASS "ohua.alang.Expr$Let" #-} NLetExpr = NLetExpr (Object# NLetExpr) deriving (Class)
 type instance Inherits NLetExpr = '[NExpr]
@@ -146,22 +148,33 @@ instance NativeConverter ResolvedSymbol where
             (_, Just v, _) -> Sf (fromNative $ nSfBindingFnName v) (fmap fromNative $ nSfBindingId v)
             (_, _, Just v) -> Env $ fromNative $ nEnvBindingId v
             _ -> error "unconvertable"
-    toNative = not_implemented
+    toNative (Local l) = superCast $ newLocalBinding $ toNative l
+    toNative (Sf name num) = superCast $ newSFBinding (toNative name) num
+    toNative (Env n) = superCast $ newEnvBinding $ toNative n
 
 data {-# CLASS "ohua.alang.ResolvedSymbol$Local" #-} NLocalBinding = NLocalBinding (Object# NLocalBinding) deriving Class
 
+type instance Inherits NLocalBinding = '[NResolvedSymbol]
+
 foreign import java "@field binding" nLocalBindingBinding :: NLocalBinding -> NBinding
+foreign import java "@new" newLocalBinding :: NBinding -> NLocalBinding
 
 
 data {-# CLASS "ohua.alang.ResolvedSymbol$Sf" #-} NSfBinding = NSfBinding (Object# NSfBinding) deriving Class
 
+type instance Inherits NSfBinding = '[NResolvedSymbol]
+
 foreign import java "@field fnName" nSfBindingFnName :: NSfBinding -> NFnName
 foreign import java "@field fnId" nSfBindingId :: NSfBinding -> Maybe JInteger
+foreign import java "@new" newSFBinding :: NFnName -> Maybe Int -> NSfBinding
+
 
 data {-# CLASS "ohua.alang.ResolvedSymbol$Env" #-} NEnvBinding = NEnvBinding (Object# NEnvBinding) deriving Class
 
-foreign import java "@field id" nEnvBindingId :: NEnvBinding -> JInteger
+type instance Inherits NEnvBinding = '[NResolvedSymbol]
 
+foreign import java "@field id" nEnvBindingId :: NEnvBinding -> JInteger
+foreign import java "@new" newEnvBinding :: Int -> NEnvBinding
 
 
 data {-# CLASS "ohua.graph.Target" #-} NTarget = NTarget (Object# NTarget) deriving Class

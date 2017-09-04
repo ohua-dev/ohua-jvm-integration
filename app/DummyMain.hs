@@ -36,8 +36,14 @@ main = do
     hPutStrLn stderr $ show converted
 
     let !bnds = definedBindings converted
-    c <- flip runOhuaT0 bnds $ toALang reg converted
-    print c
+    Right (c, _) <- flip runOhuaT0 bnds $ do 
+        (alang, envs) <- toALang reg converted
+        liftIO $ putStrLn $ show alang
+        p <- pipeline alang 
+        liftIO $ putStrLn $ show p
+        return p
+    let native = toNative c
+    putStrLn $ fromJava $ toString native
 
     -- let !bnds = definedBindings converted
 

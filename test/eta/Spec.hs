@@ -1,0 +1,4 @@
+
+import ConversionTests
+
+main = testAll

@@ -19,6 +19,13 @@ instance NFData ST where
     rnf (Sym s) = s `deepseq` ()
     rnf (Vec v) = v `deepseq` ()
 
+instance Eq ST where
+    Form f1 == Form f2 = f1 == f2
+    Sym s1 == Sym s2 = s1 == s2
+    Vec v1 == Vec v2 = v1 == v2
+    Literal l1 == Literal l2 = True -- FIXME
+    _ == _ = False
+
 data Symbol = Symbol 
     { namespace :: Maybe T.Text 
     , name :: T.Text
@@ -27,7 +34,7 @@ data Symbol = Symbol
 instance NFData Symbol where
     rnf (Symbol ns n) = ns `deepseq` n `deepseq` ()
 
-newtype Vector = Vector { vectorToList :: [ST] }
+newtype Vector = Vector { vectorToList :: [ST] } deriving Eq
 
 instance NFData Vector where
     rnf (Vector v) = v `deepseq` ()
