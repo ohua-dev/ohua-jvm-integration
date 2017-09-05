@@ -6,5 +6,5 @@ import Ohua.Compat.JVM.ToALang
 import Ohua.Types
 
 
-simpleRegistry :: HS.HashSet Binding -> HM.HashMap Binding Binding -> SfRegistry
-simpleRegistry set map = SfRegistry (`HS.member` set) (`HM.lookup` map)
+simpleRegistry :: HM.HashMap Binding FnName -> SfRegistry
+simpleRegistry map = SfRegistry (`HM.lookup` map)

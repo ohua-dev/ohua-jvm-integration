@@ -16,10 +16,9 @@ import Data.Functor.Identity
 
 data {-# CLASS "ohua.Compiler" #-} NCompiler = NCompiler (Object# NCompiler) deriving Class
 
-data {-# CLASS "ohua.support.Linker" #-} IsLinker = IsLinker (Object# IsLinker) deriving Class
+data {-# CLASS "ohua.Linker" #-} IsLinker = IsLinker (Object# IsLinker) deriving Class
 
-foreign import java unsafe "@interface resolveUnqualified" linkerResolveUnqualified :: String -> Java IsLinker (Maybe String)
-foreign import java unsafe "@interface resolveQualified" linkerResolveQualified :: String -> Java IsLinker Bool
+foreign import java unsafe "@interface resolve" linkerResolveUnqualified :: String -> Java IsLinker (Maybe NFnName)
 
 nativeCompile :: IsLinker -> Object -> IO NGraph
 nativeCompile linker thing = toNative . either (error . T.unpack) id <$> compile (fromNative thing)
@@ -27,8 +26,7 @@ nativeCompile linker thing = toNative . either (error . T.unpack) id <$> compile
     compile st = runOhuaT0IO (pipeline . fst =<< toALang registry st) (definedBindings st)
     registry = 
         SfRegistry 
-        (pureJavaWith linker . linkerResolveQualified . bndToString)
-        (fmap stringToBinding . pureJavaWith linker . linkerResolveUnqualified . bndToString)
+        (fmap fromNative . pureJavaWith linker . linkerResolveUnqualified . bndToString)
     bndToString = T.unpack . unBinding
     stringToBinding = Binding . T.pack
 

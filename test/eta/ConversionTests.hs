@@ -43,7 +43,7 @@ instance Arbitrary Target where arbitrary = Target <$> arbitrary <*> arbitrary
 instance Arbitrary Source where arbitrary = oneof [LocalSource <$> arbitrary, EnvSource <$> arbitrary]
 instance Arbitrary Arc where arbitrary = Arc <$> arbitrary <*> arbitrary
 instance Arbitrary Binding where arbitrary = Binding <$> arbitrary
-instance Arbitrary FnName where arbitrary = FnName <$> arbitrary <*> arbitrary
+instance Arbitrary FnName where arbitrary = FnName <$> arbitrary
 instance Arbitrary FnId where arbitrary = FnId <$> arbitrary
 instance Arbitrary HostExpr where arbitrary = HostExpr <$> arbitrary
 instance Arbitrary ResolvedSymbol where

@@ -3,10 +3,8 @@ package ohua.types;
 
 public final class FnName {
     public final String name;
-    public final String namespace;
-    public FnName(final String name, final String namespace) {
+    public FnName(final String name) {
         this.name = name;
-        this.namespace = namespace;
     }
 
     public String toString(){ return namespace + "/" + name; }

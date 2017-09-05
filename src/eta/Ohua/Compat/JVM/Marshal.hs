@@ -149,8 +149,8 @@ instance NativeConverter ResolvedSymbol where
             (_, _, Just v) -> Env $ fromNative $ nEnvBindingId v
             _ -> error "unconvertable"
     toNative (Local l) = superCast $ newLocalBinding $ toNative l
-    toNative (Sf name num) = superCast $ newSFBinding (toNative name) num
-    toNative (Env n) = superCast $ newEnvBinding $ toNative n
+    toNative (Sf name num) = superCast $ newSFBinding (toNative name) (fmap unFnId num)
+    toNative (Env n) = superCast $ newEnvBinding $ unwrapHostExpr n
 
 data {-# CLASS "ohua.alang.ResolvedSymbol$Local" #-} NLocalBinding = NLocalBinding (Object# NLocalBinding) deriving Class
 
@@ -244,11 +244,12 @@ data {-# CLASS "ohua.types.FnName" #-} NFnName = NFnName (Object# NFnName) deriv
 
 instance NativeConverter FnName where
     type NativeType FnName = NFnName
-    fromNative fnName = FnName (fromJava $ nFnNameName fnName) (fromJava $ nFnNameNamespace fnName)
-    toNative = not_implemented
+    fromNative = FnName . fromJava . nFnNameName
+    toNative = newFnName . T.unpack . unwrapFnName
 
 foreign import java "@field name" nFnNameName :: NFnName -> JString
 foreign import java "@field namespace" nFnNameNamespace :: NFnName -> JString
+foreign import java "@new" newFnName :: String -> NFnName
 
 instance NativeConverter FnId where
     type NativeType FnId = JInteger

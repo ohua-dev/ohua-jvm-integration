@@ -16,6 +16,7 @@ import Control.Monad.Writer
 import Data.Foldable
 import Java
 import Lens.Micro
+import Lens.Micro.Mtl
 import Control.Category hiding ((.), id)
 import Ohua.Util
 import qualified Data.Text as T
@@ -45,8 +46,7 @@ fnSym = Symbol Nothing "fn"
 
 
 data SfRegistry = SfRegistry 
-    { sfRegistryQual :: Binding -> Bool
-    , sfRegistryUnqual :: Binding -> Maybe Binding
+    { registryResolve :: Binding -> Maybe FnName
     }
 
 newtype DeclaredSymbols = DeclaredSymbols { unwrapDeclaredSymbols :: HS.HashSet Binding }
@@ -65,9 +65,8 @@ isDefined :: (MonadReader r m, HasDeclaredSymbols r, ToBinding b) => b -> m Bool
 isDefined b = asks (HS.member (toBinding b) . unwrapDeclaredSymbols . (^. declaredSymbols))
 
 
-isSf :: (MonadReader r m, HasSfRegistry r, ToBinding b) => b -> m (Maybe Binding)
-isSf b' = asks $ (^. sfRegistry) >>> \(SfRegistry qual unqual) -> 
-    unqual b `mplus` if qual b then Just b else Nothing
+isSf :: (MonadReader r m, HasSfRegistry r, ToBinding b) => b -> m (Maybe FnName)
+isSf b' = (($ b) . registryResolve) <$> view sfRegistry
   where b = toBinding b'
 
 
@@ -81,7 +80,7 @@ toALang reg st = (\(a, s, ()) -> (a, s)) <$> runRWST (go st) (noDeclaredSymbols,
             if isLocal then 
                 return (Local $ symToBinding s) 
             else 
-                isSf s >>= maybe (toEnvRef s) (fmap (`Sf` Nothing) . bndToFnName)
+                isSf s >>= maybe (toEnvRef s) (return . (`Sf` Nothing))
     go (Vec v) = Var <$> toEnvRef v
     go (Form []) = failWith "Empty form"
     go (Form (Sym l:rest)) | l == letSym =
