@@ -8,4 +8,6 @@ public final class FnName {
         this.name = name;
         this.namespace = namespace;
     }
+
+    public String toString(){ return namespace + "/" + name; }
 }
