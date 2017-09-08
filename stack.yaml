@@ -1,6 +1,6 @@
 extra-package-dbs: []
 packages:
 - '.'
-- '../ohua-core/'
+- '../core/'
 extra-deps: []
 resolver: lts-6.31

@@ -1,7 +1,7 @@
 ;
 ; ohua : link.clj
 ;
-; Copyright (c) Sebastian Ertel, Justus Adam 2016. All Rights Reserved.
+; Copyright (c) 2016, 2017 Sebastian Ertel, Justus Adam. All Rights Reserved.
 ;
 ; This source code is licensed under the terms described in the associated LICENSE.TXT file.
 ;
