@@ -31,11 +31,34 @@ nativeCompile linker thing = toNative . either (error . T.unpack) id <$> compile
     stringToBinding = Binding . T.pack
 
 
+spliceEnv :: OutGraph -> Seq Object -> AbstractOutGraph Object
+spliceEnv (OutGraph ops oldArcs) objs = OutGraph ops arcs
+  where
+    arcs = map f oldArcs
+    f (Arc (EnvSource (HostExpr index))) = objs !! index
+    f a = a
+
+nativeCompileWSplice :: IsLinker -> Object -> IO NGraph
+nativeCompileWSplice linker thing = toNative . either (error . T.unpack) id <$> compile (fromNative thing)
+  where
+    compile st = flip runOhuaT0IO (definedBindings st) $ do 
+        (alang, envExprs) <- toALang registry st
+        graph <- pipeline alang
+        return $ spliveEnv graph envExprs
+    registry = 
+        SfRegistry 
+        (fmap fromNative . pureJavaWith linker . linkerResolveUnqualified . bndToString)
+    bndToString = T.unpack . unBinding
+    stringToBinding = Binding . T.pack
+
+
 -- nativeToAlang :: Object -> IO ()
 -- nativeToAlang = either error (\(alang, objects) -> print alang >> print (toList objects)) . (\st -> runOhuaT0 (toALang st) (definedBindings st)) . fromNative
 
 
 foreign export java "@static ohua.Compiler.compile" nativeCompile :: IsLinker -> Object -> IO NGraph
+
+foreign export java "@static ohua.Compiler.compileAndSpliceEnv" nativeCompileWSplice :: IsLinker -> Object -> IO NGraph
 
 -- foreign export java "@static ohua.Compiler.testToALang" nativeToAlang :: Object -> IO ()
 

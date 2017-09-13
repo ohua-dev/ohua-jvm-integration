@@ -186,14 +186,14 @@ instance NativeConverter Target where
 
 foreign import java "@new" newNTarget :: JInteger -> JInteger -> NTarget
 
-data {-# CLASS "ohua.graph.Graph" #-} NGraph = NGraph (Object# NGraph) deriving Class
+data {-# CLASS "ohua.graph.Graph" #-} NGraph envExpr = NGraph (Object# (NGraph envExpr)) deriving Class
 
-instance NativeConverter OutGraph where
-    type NativeType OutGraph = NGraph
+instance NativeConverter a => NativeConverter (AbstractOutGraph a) where
+    type NativeType (AbstractOutGraph a) = NGraph (NativeType a)
     toNative (OutGraph ops arcs) = newNGraph (toJava $ map toNative ops) (toJava $ map toNative arcs)
     fromNative = not_implemented
 
-foreign import java "@new" newNGraph :: NOperatorArr -> NArcArr -> NGraph
+foreign import java "@new" newNGraph :: NOperatorArr -> NArcArr a -> NGraph a
 
 data {-# CLASS "ohua.graph.Operator" #-} NOperator = NOperator (Object# NOperator) deriving Class
 
@@ -210,8 +210,8 @@ instance JArray NOperator NOperatorArr
 
 data {-# CLASS "ohua.graph.Source" #-} NSource = NSource (Object# NSource) deriving Class
 
-instance NativeConverter Source where
-    type NativeType Source = NSource
+instance NativeConverter a => NativeConverter (Source a) where
+    type NativeType (Source a) = (NSource (NativeType a))
     toNative (LocalSource t) = superCast $ newNLocalSource $ toNative t
     toNative (EnvSource e) = superCast $ newNEnvSource $ toNative e
     fromNative = not_implemented
@@ -219,26 +219,26 @@ instance NativeConverter Source where
 
 data {-# CLASS "ohua.graph.Source$Local" #-} NLocalSource = NLocalSource (Object# NLocalSource) deriving Class
     
-type instance Inherits NLocalSource = '[NSource]
-foreign import java "@new" newNLocalSource :: NTarget -> NLocalSource
+type instance Inherits NLocalSource = '[NSource a]
+foreign import java "@new" newNLocalSource :: NTarget -> NLocalSource a
 
-data {-# CLASS "ohua.graph.Source$Env" #-} NEnvSource = NEnvSource (Object# NEnvSource) deriving Class
+data {-# CLASS "ohua.graph.Source$Env" #-} NEnvSource a = NEnvSource (Object# (NEnvSource a)) deriving Class
 
-type instance Inherits NEnvSource = '[NSource]
-foreign import java "@new" newNEnvSource :: JInteger -> NEnvSource
+type instance Inherits NEnvSource a = '[NSource a]
+foreign import java "@new" newNEnvSource :: (a <: Object) => a -> NEnvSource a
 
-data {-# CLASS "ohua.graph.Arc" #-} NArc = NArc (Object# NArc) deriving Class
+data {-# CLASS "ohua.graph.Arc" #-} NArc a = NArc (Object# (NArc a)) deriving Class
 
-instance NativeConverter Arc where
-    type NativeType Arc = NArc
+instance NativeConverter a => NativeConverter (Arc a) where
+    type NativeType (Arc a) = NArc (NativeType a)
     toNative (Arc target source) = newNArc (toNative target) (toNative source)
     fromNative = not_implemented
 
-foreign import java "@new" newNArc :: NTarget -> NSource -> NArc
+foreign import java "@new" newNArc :: (a <: Object) => NTarget -> NSource a -> NArc a
 
-data {-# CLASS "ohua.graph.Arc[]" #-} NArcArr = NArcArr (Object# NArcArr) deriving Class
+data {-# CLASS "ohua.graph.Arc[]" #-} NArcArr a = NArcArr (Object# (NArcArr a)) deriving Class
 
-instance JArray NArc NArcArr
+instance JArray (NArc a) (NArcArr a)
 
 data {-# CLASS "ohua.types.FnName" #-} NFnName = NFnName (Object# NFnName) deriving Class
 

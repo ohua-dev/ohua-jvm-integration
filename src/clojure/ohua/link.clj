@@ -9,7 +9,9 @@
 (ns ohua.link
   (:require [clojure.string :as string]
             [ohua.util.loader :refer [load-from-classpath]])
-  (:import (clojure.lang Symbol Var)))
+  (:import (clojure.lang Symbol Var)
+           (ohua StatefulFunctionProvider)
+           (ohua.loader MultiDispatchSFProvider)))
 
 
 (def ^:private ohua-linker-ref :__ohua-linker)
@@ -37,16 +39,13 @@
 (def is-builtin? (partial contains? (set (concat (vals builtins) (keys builtins)))))
 
 
-(def get-backend
-  (let [backend-ref (atom nil)]
-    (fn []
-      (if-let [b @backend-ref]
-        b
-        (reset! backend-ref
-                (let [_ (require 'ohua.backend/clojure)
-                      bck (var-get (clojure.core/resolve 'ohua.backend.clojure/backend))]
-                  (.initialize bck)
-                  bck))))))
+(def backend (MultiDispatchSFProvider/combine (into-array [
+  (reify StatefulFunctionProvider
+    (exists [_ ref]
+      (not (nil? (clojure.core/resolve (symbol ref)))))
+    (provide [_ ref]
+      (clojure.core/resolve (symbol ref))))
+  ])))
 
 
 (defn ^Linker get-linker []
@@ -61,28 +60,8 @@
     (string? ns-name) ns-name
     :else (throw (new IllegalArgumentException (str "ns-name must be symbol or string, not " (if (nil? ns-name) "nil" (type ns-name)))))))
 
-(defn get-ns [ns-name]
-  (into #{} (.listNamespace (get-backend) (->ns-string ns-name))))
-
-; HACK this is necessary due to shortcomings of clojures macroexpand
-(def create-ns-if-missing
-  (let [registry (atom #{})]
-    (fn [ns]
-      (when-not (@registry ns)
-        (swap! registry conj ns)
-        (create-ns ns)))))
-
 (defn import-ns [ns-name]
-  (let [ns-name (->ns-string ns-name)]
-    (if-let [res (@(.-imported_namespaces (get-linker)) ns-name)]
-      res
-      (let [loaded (get-ns ns-name)]
-        (create-ns-if-missing (symbol ns-name))
-        (swap! (.-imported_namespaces (get-linker)) assoc ns-name loaded)
-        loaded))))
-
-(defn get-imported-ns [ns-name]
-  (@(.-imported_namespaces (get-linker)) (->ns-string ns-name)))
+  (swap (.-imported_namespaces (get-linker)) conj (->ns-string ns-name)))
 
 (defn is-imported? [ns-name]
   (contains? @(.-imported_namespaces (get-linker)) (->ns-string ns-name)))
@@ -98,8 +77,6 @@
   (swap! (.-alias_registry (get-linker)) assoc key value))
 
 (defn ohua-alias [qual-ref alias-ref]
-  (assert (symbol? qual-ref))
-  (assert (or (nil? (namespace qual-ref)) (is-imported? (namespace qual-ref))))
   (if (is-aliased? alias-ref) (println "Already has registered ref for " (str alias-ref)))
   (register-alias-bare alias-ref qual-ref))
 
@@ -112,29 +89,15 @@
                   :else (throw (IllegalArgumentException. "Unexpected type for name.")))]
       (@(.-alias_registry (get-linker)) name-))))
 
-(defn resolve-ns [ns-name]
-  (let [ns-name (->ns-string ns-name)]
-    (if-let [ns-name
-             (if-let [unaliased (ohua-unalias ns-name)]
-               (cond
-                 (symbol? unaliased) (if (nil? (namespace unaliased)) (name unaliased))
-                 (string? unaliased) unaliased
-                 :else nil)
-               ns-name)]
-      (get-imported-ns ns-name))))
-
 (defn resolve [name-str]
   (let [sym (symbol name-str)]
     (if-let [unaliased (if (nil? (namespace sym))
                         (ohua-unalias sym)
                         sym)]
-      (if-let [ns (resolve-ns (namespace unaliased))]
-        (if (ns (name unaliased))
-          (FnName. (str unaliased)))))))
-
-(defn is-defined? [name]
-  (and (symbol? name)
-       (not (nil? (resolve name)))))
+      (and 
+        (contains @(.-imported_namespaces (get-linker)) (namespace unalias))
+        (.exists backend (str unaliased)))
+      false)))
 
 (defn ohua-require-fn
   "Handles :as and :refer, lacks :reload, :verbose etc."
@@ -167,53 +130,8 @@
 
 (defmacro ohua-require [& args] (apply ohua-require-fn args))
 
-;;;
-;;; The linker is a bit special because it is used during compilation as well as execution.
-;;; During compilation the linker loads the necessary operators (from Java code) such that
-;;; a piece of Ohua code can be compiled successfully. Function definitions however are
-;;; defined in Clojure and therefore stored here. The Java linker code for functions is
-;;; only used at runtime.
-;;;
 
-(defn list-links
-  "List all references currently linked."
-  []
-  (concat
-    (mapcat
-      (fn [[alias ref]]
-        (if (and (symbol? ref) (nil? (namespace ref)))
-          (map symbol (repeat (->ns-string alias)) (get-imported-ns ref))
-          [(if (symbol? alias) alias (symbol alias))]))
-      (seq @(.-alias_registry (get-linker))))
-    (mapcat
-      (fn [[ns-name ns-dict]]
-        (map symbol (repeat ns-name) ns-dict))
-      (seq @(.-imported_namespaces (get-linker))))))
-
-
-(defn- normalize-sfn-lookup-type [val]
-  (condp = (type val)
-    Var (normalize-sfn-lookup-type (var-get val))
-    String val
-    Class (name val)
-    Symbol (name val)
-    false))
-
-(defn sfn? [val]
-  (not (nil? (resolve val))))
-
-
-(defn is-unresolved-sfn? [thing]
-  (and (symbol? thing)
-       (namespace thing)
-       (not (clojure.core/resolve thing))
-       (sfn? thing)))
-
-(defn make-sfn [sym]
-  (let [sym (resolve sym)]                                  ; TODO later unnecessary when sym-resolve is done
-    (.asStatefulFunction (get-backend) (namespace sym) (name sym))))
-
-
-(reify ohua.Linker
-  (resolve [_ n]
-    (resolve n)))
+(def clj-linker 
+  (reify ohua.Linker
+    (resolve [_ n]
+      (resolve n))))
