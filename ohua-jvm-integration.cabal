@@ -44,7 +44,7 @@ library
     , containers >= 0.5.8.1 && <= 0.5.9.1
     -- , extra == 1.5.2
     , monad-loops == 0.4.3
-    , deepseq==1.4.2.0
+    , deepseq >=1.4.2.0 && <=1.4.3.0
     , text >= 1.2.2.1 && <= 1.2.2.2
     , ohua-core
   hs-source-dirs:      src/eta
@@ -97,4 +97,4 @@ executable ohua-dummy-main
     , mtl
     , unordered-containers
     , text
-    , deepseq==1.4.2.0
+    , deepseq

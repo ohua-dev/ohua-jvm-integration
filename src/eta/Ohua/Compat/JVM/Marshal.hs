@@ -27,12 +27,12 @@ import Ohua.Compile
 import qualified Clojure
 import System.IO.Unsafe
 import System.IO
-import Ohua.Compat.JVM.ClojureST
+import Ohua.Compat.JVM.ClojureST as ClST
 import qualified Data.Text as T
 
 instance Show Object where show = fromJString . toString
 
-class NativeConverter a where
+class Class (NativeType a) => NativeConverter a where
     type NativeType a
     fromNative :: NativeType a -> a
     toNative :: a -> NativeType a
@@ -48,6 +48,11 @@ type CljExpr = Object
 
 not_implemented :: a
 not_implemented = error "This function is not (yet) implemented"
+
+instance NativeConverter QualifiedBinding where
+    type NativeType QualifiedBinding = JString
+    toNative (QualifiedBinding ns name) = toNative $ T.intercalate "/" (map unBinding $ nsRefToList ns) `T.append` (unBinding name)
+    fromNative = not_implemented
 
 data {-# CLASS "com.ohua.alang.Expr" #-} NExpr = NExpr (Object# NExpr) deriving (Class)
 
@@ -164,9 +169,9 @@ data {-# CLASS "ohua.alang.ResolvedSymbol$Sf" #-} NSfBinding = NSfBinding (Objec
 
 type instance Inherits NSfBinding = '[NResolvedSymbol]
 
-foreign import java "@field fnName" nSfBindingFnName :: NSfBinding -> NFnName
+foreign import java "@field fnName" nSfBindingFnName :: NSfBinding -> JString
 foreign import java "@field fnId" nSfBindingId :: NSfBinding -> Maybe JInteger
-foreign import java "@new" newSFBinding :: NFnName -> Maybe Int -> NSfBinding
+foreign import java "@new" newSFBinding :: JString -> Maybe Int -> NSfBinding
 
 
 data {-# CLASS "ohua.alang.ResolvedSymbol$Env" #-} NEnvBinding = NEnvBinding (Object# NEnvBinding) deriving Class
@@ -202,29 +207,29 @@ instance NativeConverter Operator where
     toNative (Operator id t) = newNOperator (toNative id) (toNative t)
     fromNative = not_implemented
 
-foreign import java "@new" newNOperator :: JInteger -> NFnName -> NOperator
+foreign import java "@new" newNOperator :: JInteger -> JString -> NOperator
 
 data {-# CLASS "ohua.graph.Operator[]" #-} NOperatorArr = NOperatorArr (Object# NOperatorArr) deriving Class
 
 instance JArray NOperator NOperatorArr
 
-data {-# CLASS "ohua.graph.Source" #-} NSource = NSource (Object# NSource) deriving Class
+data {-# CLASS "ohua.graph.Source" #-} NSource a = NSource (Object# (NSource a)) deriving Class
 
 instance NativeConverter a => NativeConverter (Source a) where
-    type NativeType (Source a) = (NSource (NativeType a))
+    type NativeType (Source a) = NSource (NativeType a)
     toNative (LocalSource t) = superCast $ newNLocalSource $ toNative t
     toNative (EnvSource e) = superCast $ newNEnvSource $ toNative e
     fromNative = not_implemented
 
 
-data {-# CLASS "ohua.graph.Source$Local" #-} NLocalSource = NLocalSource (Object# NLocalSource) deriving Class
+data {-# CLASS "ohua.graph.Source$Local" #-} NLocalSource a = NLocalSource (Object# (NLocalSource a)) deriving Class
     
-type instance Inherits NLocalSource = '[NSource a]
+type instance Inherits (NLocalSource a) = '[NSource a]
 foreign import java "@new" newNLocalSource :: NTarget -> NLocalSource a
 
 data {-# CLASS "ohua.graph.Source$Env" #-} NEnvSource a = NEnvSource (Object# (NEnvSource a)) deriving Class
 
-type instance Inherits NEnvSource a = '[NSource a]
+type instance Inherits (NEnvSource a) = '[NSource a]
 foreign import java "@new" newNEnvSource :: (a <: Object) => a -> NEnvSource a
 
 data {-# CLASS "ohua.graph.Arc" #-} NArc a = NArc (Object# (NArc a)) deriving Class
@@ -240,17 +245,6 @@ data {-# CLASS "ohua.graph.Arc[]" #-} NArcArr a = NArcArr (Object# (NArcArr a)) 
 
 instance JArray (NArc a) (NArcArr a)
 
-data {-# CLASS "ohua.types.FnName" #-} NFnName = NFnName (Object# NFnName) deriving Class
-
-instance NativeConverter FnName where
-    type NativeType FnName = NFnName
-    fromNative = FnName . fromJava . nFnNameName
-    toNative = newFnName . T.unpack . unwrapFnName
-
-foreign import java "@field name" nFnNameName :: NFnName -> JString
-foreign import java "@field namespace" nFnNameNamespace :: NFnName -> JString
-foreign import java "@new" newFnName :: String -> NFnName
-
 instance NativeConverter FnId where
     type NativeType FnId = JInteger
     fromNative = FnId . fromJava
@@ -260,6 +254,11 @@ instance NativeConverter HostExpr where
     type NativeType HostExpr = JInteger
     fromNative = HostExpr . fromJava
     toNative = toJava . unwrapHostExpr
+
+instance NativeConverter Object where
+    type NativeType Object = Object
+    fromNative = id
+    toNative = id
 
 asBool :: Object -> Bool
 asBool !o = (fromJava :: JBoolean -> Bool) . unsafeCast $ o
@@ -288,7 +287,7 @@ cljAsSeq = pureJavaWith (Clojure.coreVar "seq") . Clojure.invoke1
 cljVector :: Object -> Object
 cljVector = pureJavaWith (Clojure.coreVar "vec") . Clojure.invoke1
 
-mkSym :: Symbol -> Object
+mkSym :: ClST.Symbol -> Object
 mkSym sym = pureJavaWith (Clojure.coreVar "symbol") $
     case sym of
         Symbol Nothing name -> Clojure.invoke1 $ convert name
@@ -312,7 +311,7 @@ instance NativeConverter ST where
     toNative (Vec v) = cljVector $ (superCast :: Collection Object -> Object) $ toJava $ map toNative $ vectorToList v
     toNative (Literal o) = o
 
-instance ToEnvExpr Symbol where
+instance ToEnvExpr ClST.Symbol where
     toEnvExpr = mkSym
 
 instance ToEnvExpr Vector where

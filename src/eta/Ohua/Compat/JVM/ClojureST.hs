@@ -1,13 +1,13 @@
 module Ohua.Compat.JVM.ClojureST where
 
 
-import Java
-import Data.Hashable
-import qualified Data.Text as T
-import Control.DeepSeq
+import           Control.DeepSeq
+import           Data.Hashable
+import qualified Data.Text       as T
+import           Java
 
 
-data ST 
+data ST
     = Literal Object
     | Form [ST]
     | Sym Symbol
@@ -15,9 +15,9 @@ data ST
 
 instance NFData ST where
     rnf (Literal o) = ()
-    rnf (Form l) = l `deepseq` ()
-    rnf (Sym s) = s `deepseq` ()
-    rnf (Vec v) = v `deepseq` ()
+    rnf (Form l)    = l `deepseq` ()
+    rnf (Sym s)     = s `deepseq` ()
+    rnf (Vec v)     = v `deepseq` ()
 
 instance Eq ST where
     Form f1 == Form f2 = f1 == f2
@@ -26,10 +26,10 @@ instance Eq ST where
     Literal l1 == Literal l2 = True -- FIXME
     _ == _ = False
 
-data Symbol = Symbol 
-    { namespace :: Maybe T.Text 
-    , name :: T.Text
-    } deriving Eq
+data Symbol = Symbol
+    { namespace :: Maybe T.Text
+    , name      :: T.Text
+    } deriving (Eq, Show)
 
 instance NFData Symbol where
     rnf (Symbol ns n) = ns `deepseq` n `deepseq` ()
