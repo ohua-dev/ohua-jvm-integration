@@ -27,30 +27,22 @@ nativeCompile :: IsLinker -> Object -> IO (NativeType OutGraph)
 nativeCompile linker thing = toNative . either (error . T.unpack) id <$> compile (fromNative thing)
   where
     compile st = runOhuaT0IO (pipeline . fst =<< toALang registry st) (definedBindings st)
-    registry = 
-        SfRegistry 
+    registry =
+        SfRegistry
         (fmap fromNative . pureJavaWith linker . linkerResolveUnqualified . bndToString)
     bndToString = T.unpack . unBinding
     stringToBinding = Binding . T.pack
 
 
-spliceEnv :: OutGraph -> Seq Object -> AbstractOutGraph Object
-spliceEnv (OutGraph ops oldArcs) objs = OutGraph ops arcs
-  where
-    arcs = map f oldArcs
-    f (Arc t source) = Arc t $ case source of 
-        EnvSource (HostExpr i) -> EnvSource (objs `Seq.index` i)
-        LocalSource t -> LocalSource t
-
 nativeCompileWSplice :: IsLinker -> Object -> IO (NGraph Object)
 nativeCompileWSplice linker thing = toNative . either (error . T.unpack) id <$> compile (fromNative thing)
   where
-    compile st = flip runOhuaT0IO (definedBindings st) $ do 
+    compile st = flip runOhuaT0IO (definedBindings st) $ do
         (alang, envExprs) <- toALang registry st
         graph <- pipeline alang
-        return $ spliceEnv graph envExprs
-    registry = 
-        SfRegistry 
+        return $ spliceEnv graph (Seq.index envExprs)
+    registry =
+        SfRegistry
         (fmap fromNative . pureJavaWith linker . linkerResolveUnqualified . bndToString)
     bndToString = T.unpack . unBinding
     stringToBinding = Binding . T.pack
@@ -65,4 +57,3 @@ foreign export java "@static ohua.Compiler.compile" nativeCompile :: IsLinker ->
 foreign export java "@static ohua.Compiler.compileAndSpliceEnv" nativeCompileWSplice :: IsLinker -> Object -> IO (NGraph Object)
 
 -- foreign export java "@static ohua.Compiler.testToALang" nativeToAlang :: Object -> IO ()
-
