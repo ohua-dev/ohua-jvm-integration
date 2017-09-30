@@ -7,5 +7,5 @@ public final class FnName {
         this.name = name;
     }
 
-    public String toString(){ return namespace + "/" + name; }
+    public String toString(){ return name; }
 }

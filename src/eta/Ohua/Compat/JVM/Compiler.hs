@@ -21,7 +21,7 @@ data {-# CLASS "ohua.Compiler" #-} NCompiler = NCompiler (Object# NCompiler) der
 
 data {-# CLASS "ohua.Linker" #-} IsLinker = IsLinker (Object# IsLinker) deriving Class
 
-foreign import java unsafe "@interface resolve" linkerResolveUnqualified :: String -> Java IsLinker (Maybe (NativeType QualifiedBinding))
+foreign import java unsafe "@interface resolve" linkerResolveUnqualified :: String -> Java IsLinker (Maybe JString)
 
 nativeCompile :: IsLinker -> Object -> IO (NativeType OutGraph)
 nativeCompile linker thing = toNative . either (error . T.unpack) id <$> compile (fromNative thing)
@@ -52,7 +52,7 @@ nativeCompileWSplice linker thing = toNative . either (error . T.unpack) id <$> 
 -- nativeToAlang = either error (\(alang, objects) -> print alang >> print (toList objects)) . (\st -> runOhuaT0 (toALang st) (definedBindings st)) . fromNative
 
 
-foreign export java "@static ohua.Compiler.compile" nativeCompile :: IsLinker -> Object -> IO (NativeType OutGraph)
+foreign export java "@static ohua.Compiler.compile" nativeCompile :: IsLinker -> Object -> IO (NGraph JInteger)
 
 foreign export java "@static ohua.Compiler.compileAndSpliceEnv" nativeCompileWSplice :: IsLinker -> Object -> IO (NGraph Object)
 

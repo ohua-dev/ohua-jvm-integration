@@ -1,7 +1,4 @@
 (ns ohua.lang
-  (:import 
-    (ohua Compiler
-          Runtime))
   (:require [clojure.set :as set]
             [clojure.string :as str]
             [ohua.link]))
@@ -12,8 +9,8 @@
           )
 
 
-(defmacro ohua [code] 
-  (let [graph (Compiler/compileAndSpliceEnv 
+(defmacro ohua [code options]
+  (let [graph (ohua.Compiler/compileAndSpliceEnv
                 ohua.link/clj-linker
                 code)]
-    (Runtime/prepare graph)))
+    (ohua.Runtime/prepare graph)))

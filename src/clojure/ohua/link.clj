@@ -11,7 +11,7 @@
             [ohua.util.loader :refer [load-from-classpath]])
   (:import (clojure.lang Symbol Var)
            (ohua StatefulFunctionProvider)
-           (ohua.loader MultiDispatchSFProvider)))
+           (ohua.loader MultiDispatchSFProvider JavaProviderFromAnnotatedMethod)))
 
 
 (def ^:private ohua-linker-ref :__ohua-linker)
@@ -20,32 +20,6 @@
 (deftype Linker [alias-registry imported-namespaces])
 (defn- mk-linker [] (->Linker (atom {}) (atom {})))
 (defn- init-linker [] (let [l (mk-linker)] (alter-meta! *ns* assoc ohua-linker-ref l) l))
-
-; This map specifies how builtin symbols are resolved.
-; Key will be resolved to value
-; but both values and keys are allowed in the program
-; values resolve to themselves
-(def builtins {'smap    'com.ohua.lang/smap,
-               'smap-io 'com.ohua.lang/smap-io,
-               'seq     'com.ohua.lang/seq
-               'loop    'loop
-               'recur   'recur
-               'if      'if
-               'algo*   'com.ohua.lang/algo*
-               'let     'clojure.core/let
-               })
-
-
-(def is-builtin? (partial contains? (set (concat (vals builtins) (keys builtins)))))
-
-
-(def backend (MultiDispatchSFProvider/combine (into-array [
-  (reify StatefulFunctionProvider
-    (exists [_ ref]
-      (not (nil? (clojure.core/resolve (symbol ref)))))
-    (provide [_ ref]
-      (clojure.core/resolve (symbol ref))))
-  ])))
 
 
 (defn ^Linker get-linker []
@@ -61,7 +35,7 @@
     :else (throw (new IllegalArgumentException (str "ns-name must be symbol or string, not " (if (nil? ns-name) "nil" (type ns-name)))))))
 
 (defn import-ns [ns-name]
-  (swap (.-imported_namespaces (get-linker)) conj (->ns-string ns-name)))
+  (swap! (.-imported_namespaces (get-linker)) conj (->ns-string ns-name)))
 
 (defn is-imported? [ns-name]
   (contains? @(.-imported_namespaces (get-linker)) (->ns-string ns-name)))
@@ -89,14 +63,25 @@
                   :else (throw (IllegalArgumentException. "Unexpected type for name.")))]
       (@(.-alias_registry (get-linker)) name-))))
 
+
+(def backend (MultiDispatchSFProvider/combine (into-array StatefulFunctionProvider [
+  (JavaProviderFromAnnotatedMethod.)
+  ; (reify StatefulFunctionProvider
+  ;   (provide [this ns-ref sf-ref]
+  ;     ; create a stateful function object
+  ;     (clojure.core/resolve (symbol ns-ref sf-ref)))
+  ;   (exists [this ns-ref sf-ref]
+  ;     (not (nil? (clojure.core/resolve (symbol ns-ref sf-ref))))))
+  ])))
+
 (defn resolve [name-str]
   (let [sym (symbol name-str)]
     (if-let [unaliased (if (nil? (namespace sym))
                         (ohua-unalias sym)
                         sym)]
-      (and 
-        (contains @(.-imported_namespaces (get-linker)) (namespace unalias))
-        (.exists backend (str unaliased)))
+      (and
+        (contains? @(.-imported_namespaces (get-linker)) (namespace unaliased))
+        (.exists backend (namespace unaliased) (name unaliased)))
       false)))
 
 (defn ohua-require-fn
@@ -131,7 +116,7 @@
 (defmacro ohua-require [& args] (apply ohua-require-fn args))
 
 
-(def clj-linker 
+(def clj-linker
   (reify ohua.Linker
     (resolve [_ n]
       (resolve n))))

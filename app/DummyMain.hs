@@ -17,29 +17,23 @@ import Registry
 
 
 
-deriving instance Show OutGraph
-deriving instance Show Operator
-deriving instance Show Arc
-deriving instance Show Target
-deriving instance Show Source
 deriving instance Show ST
 deriving instance Show Vector
-deriving instance Show Symbol
 
 
-main = do 
+main = do
     !r <- Clojure.read "(let [a (print b)] a)"
     let converted = fromNative r
     let reg = simpleRegistry [("print", "some.module/print"), ("some.module/print", "some.module/print")]
     hPutStrLn stderr $ fromJava $ toString r
-    converted `deepseq` return ()    
+    converted `deepseq` return ()
     hPutStrLn stderr $ show converted
 
     let !bnds = definedBindings converted
-    Right (c, _) <- flip runOhuaT0 bnds $ do 
+    Right (c, _) <- flip runOhuaT0 bnds $ do
         (alang, envs) <- toALang reg converted
         liftIO $ putStrLn $ show alang
-        p <- pipeline alang 
+        p <- pipeline alang
         liftIO $ putStrLn $ show p
         return p
     let native = toNative c

@@ -6,5 +6,5 @@ import Ohua.Compat.JVM.ToALang
 import Ohua.Types
 
 
-simpleRegistry :: HM.HashMap Binding FnName -> SfRegistry
+simpleRegistry :: HM.HashMap Binding QualifiedBinding -> SfRegistry
 simpleRegistry map = SfRegistry (`HM.lookup` map)
