@@ -12,6 +12,9 @@
   :dependencies [[org.clojure/clojure "1.8.0"]]
   :source-paths ["src/clojure"]
   :java-source-paths ["src/java"]
-  :resource-paths ["dist/build/ohua-dummy-main/ohua-dummy-main.jar" "resources/ohua-jvm-runtime-0.1-SNAPSHOT.jar"]
+  :resource-paths [
+    "resources/ohua-jvm-runtime-0.1-SNAPSHOT.jar"
+    (- insert-jar-deps -)
+    ]
   :test-paths ["test/clojure"]
   )
