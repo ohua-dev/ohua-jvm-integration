@@ -18,7 +18,7 @@
 
 
 (deftype Linker [alias-registry imported-namespaces])
-(defn- mk-linker [] (->Linker (atom {}) (atom {})))
+(defn- mk-linker [] (->Linker (atom {}) (atom #{})))
 (defn- init-linker [] (let [l (mk-linker)] (alter-meta! *ns* assoc ohua-linker-ref l) l))
 
 
@@ -79,10 +79,12 @@
     (if-let [unaliased (if (nil? (namespace sym))
                         (ohua-unalias sym)
                         sym)]
-      (and
-        (contains? @(.-imported_namespaces (get-linker)) (namespace unaliased))
-        (.exists backend (namespace unaliased) (name unaliased)))
-      false)))
+      (if (and
+            (contains? @(.-imported_namespaces (get-linker)) (namespace unaliased))
+            (.exists backend (namespace unaliased) (name unaliased)))
+        (str unaliased)
+        nil)
+      nil)))
 
 (defn ohua-require-fn
   "Handles :as and :refer, lacks :reload, :verbose etc."
