@@ -14,6 +14,8 @@ import Data.Functor.Identity
 import Ohua.DFGraph
 import Data.Sequence as Seq
 import Ohua.ALang.Lang
+import Control.DeepSeq
+import Ohua.Util
 
 
 
@@ -23,29 +25,40 @@ data {-# CLASS "ohua.Linker" #-} IsLinker = IsLinker (Object# IsLinker) deriving
 
 foreign import java unsafe "@interface resolve" linkerResolveUnqualified :: String -> Java IsLinker (Maybe JString)
 
-nativeCompile :: IsLinker -> Object -> IO (NativeType OutGraph)
-nativeCompile linker thing = toNative . either (error . T.unpack) id <$> compile (fromNative thing)
+forceA :: (NFData a, Applicative m) => a -> m ()
+forceA = (`deepseq` pure ())
+
+basicCompile :: IsLinker -> Object -> IO (OutGraph, Seq Object)
+basicCompile linker thing = do
+    putStrLn "Compiler is running"
+    let st = fromNative thing
+    forceAndReport "ST was valid" st
+    compiled <- fmap (either (error . T.unpack) id) . (`runOhuaT0IO` definedBindings st) $ do
+        (alang, envExprs) <- toALang registry st
+        forceAndReport "alang converted" alang
+        liftIO $ print alang
+        -- liftIO $ writeFile "alang-dump" $ show alang
+        graph <- pipeline alang
+        forceAndReport "graph created" graph
+        pure (graph, envExprs)
+    forceAndReport "Compilation done" $ fst compiled
+    pure compiled
   where
-    compile st = runOhuaT0IO (pipeline . fst =<< toALang registry st) (definedBindings st)
     registry =
         SfRegistry
         (fmap fromNative . pureJavaWith linker . linkerResolveUnqualified . bndToString)
     bndToString = T.unpack . unBinding
     stringToBinding = Binding . T.pack
+
+
+nativeCompile :: IsLinker -> Object -> IO (NativeType OutGraph)
+nativeCompile linker thing = toNative . fst <$> basicCompile linker thing
 
 
 nativeCompileWSplice :: IsLinker -> Object -> IO (NGraph Object)
-nativeCompileWSplice linker thing = toNative . either (error . T.unpack) id <$> compile (fromNative thing)
-  where
-    compile st = flip runOhuaT0IO (definedBindings st) $ do
-        (alang, envExprs) <- toALang registry st
-        graph <- pipeline alang
-        return $ spliceEnv graph (Seq.index envExprs)
-    registry =
-        SfRegistry
-        (fmap fromNative . pureJavaWith linker . linkerResolveUnqualified . bndToString)
-    bndToString = T.unpack . unBinding
-    stringToBinding = Binding . T.pack
+nativeCompileWSplice linker thing = do
+    (graph, envExprs) <- basicCompile linker thing
+    return $ toNative $ spliceEnv graph (Seq.index envExprs)
 
 
 -- nativeToAlang :: Object -> IO ()
