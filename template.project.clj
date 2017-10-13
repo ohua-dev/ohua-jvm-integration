@@ -9,9 +9,11 @@
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
 
-  :dependencies [[org.clojure/clojure "1.8.0"]]
+  :dependencies [[org.clojure/clojure "1.8.0"]
+                 [ohua-jvm-runtime "0.1-SNAPSHOT"]]
   :source-paths ["src/clojure"]
-  :java-source-paths ["src/java"]
+  :java-source-paths ["src/java" "test/java"]
+  :profiles {:dev {:java-source-paths ["test/java"]}}
   :resource-paths [
     "resources/ohua-jvm-runtime-0.1-SNAPSHOT.jar"
     (- insert-jar-deps -)

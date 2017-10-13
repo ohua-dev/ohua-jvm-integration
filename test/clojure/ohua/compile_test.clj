@@ -8,7 +8,7 @@
             [ohua.lang :refer :all]
             [ohua.logging :as l]))
 
-(ohua :import [com.ohua.lang.tests])
+(ohua :import [ohua.tests])
 
 (deftest webserver-with-let
   "testing simple let-based implementation of the web server algorithm"
@@ -16,7 +16,7 @@
   (test/is
     (= (count
          (ohua
-          (let [r (accept "port01")]
+          (let [r (ohua.tests/accept "port01")]
             (let [s (read r)]
             (let [t (parse s)]
             (let [u (load t)]

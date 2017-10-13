@@ -52,7 +52,10 @@ not_implemented = error "This function is not (yet) implemented"
 instance NativeConverter QualifiedBinding where
     type NativeType QualifiedBinding = JString
     toNative (QualifiedBinding ns name) = toNative $ T.intercalate "/" (map unBinding $ nsRefToList ns) `T.append` (unBinding name)
-    fromNative = not_implemented
+    fromNative = either error expectQual . symbolFromString . fromNative
+      where 
+        expectQual (Qual q) = q
+        expectQual s = error $ "Expected qualified binding, got " ++ show s
 
 data {-# CLASS "com.ohua.alang.Expr" #-} NExpr = NExpr (Object# NExpr) deriving (Class)
 
@@ -293,10 +296,6 @@ mkSym sym = pureJavaWith (Clojure.coreVar "symbol") $
         Symbol Nothing name -> Clojure.invoke1 $ convert name
         Symbol (Just ns) name -> Clojure.invoke2 (convert ns) (convert name)
   where convert = superCast . (toNative :: T.Text -> JString)
-
-trace str a = unsafeDupablePerformIO $ do
-    hPutStrLn stderr str
-    return a
 
 instance NativeConverter ST where
     type NativeType ST = Object

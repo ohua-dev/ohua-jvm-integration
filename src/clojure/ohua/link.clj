@@ -17,8 +17,8 @@
 (def ^:private ohua-linker-ref :__ohua-linker)
 
 
-(deftype Linker [alias-registry imported-namespaces])
-(defn- mk-linker [] (->Linker (atom {}) (atom #{})))
+(deftype Linker [alias-registry imported-namespaces refers-all])
+(defn- mk-linker [] (->Linker (atom {}) (atom #{}) (atom #{})))
 (defn- init-linker [] (let [l (mk-linker)] (alter-meta! *ns* assoc ohua-linker-ref l) l))
 
 
@@ -54,16 +54,6 @@
   (if (is-aliased? alias-ref) (println "Already has registered ref for " (str alias-ref)))
   (register-alias-bare alias-ref qual-ref))
 
-(defn ohua-unalias [sym]
-  (if (and (symbol? sym) (not (nil? (namespace sym))))
-    sym
-    (let [name- (cond
-                  (symbol? sym) (name sym)
-                  (string? sym) sym
-                  :else (throw (IllegalArgumentException. "Unexpected type for name.")))]
-      (@(.-alias_registry (get-linker)) name-))))
-
-
 (def backend (MultiDispatchSFProvider/combine (into-array StatefulFunctionProvider [
   (JavaProviderFromAnnotatedMethod.)
   ; (reify StatefulFunctionProvider
@@ -74,6 +64,24 @@
   ;     (not (nil? (clojure.core/resolve (symbol ns-ref sf-ref))))))
   ])))
 
+(defn ohua-unalias [sym]
+  (if (and (symbol? sym) (not (nil? (namespace sym))))
+    sym
+    (let [name- (cond
+                  (symbol? sym) (name sym)
+                  (string? sym) sym
+                  :else (throw (IllegalArgumentException. "Unexpected type for name.")))]
+      (if-let [dealiased (@(.-alias_registry (get-linker)) name-)]
+        dealiased
+        (let [refer-all-candidates (filter #(.exists backend % name-) @(.refers_all (get-linker)))]
+          (case (count refer-all-candidates)
+            0 nil
+            1 (let [[ns-ref] refer-all-candidates
+                    qual-sym (symbol ns-ref name-)]
+                (ohua-alias qual-sym name-)
+                qual-sym)
+            (throw (Exception. (str "Ambiguous ocurrence of name \"" name- "\" it is defined in these namespaces: " refer-all-candidates)))))))))
+
 (defn resolve [name-str]
   (let [sym (symbol name-str)]
     (if-let [unaliased (if (nil? (namespace sym))
@@ -82,38 +90,35 @@
       (if (and
             (contains? @(.-imported_namespaces (get-linker)) (namespace unaliased))
             (.exists backend (namespace unaliased) (name unaliased)))
-        (str unaliased)
-        nil)
-      nil)))
+        (str unaliased)))))
 
-(defn ohua-require-fn
-  "Handles :as and :refer, lacks :reload, :verbose etc."
+(defn ohua-require-fn 
+
   [& args]
   (doseq [spec args]
     (cond
       (symbol? spec) (do
                        (assert (not (namespace spec)))
                        (import-ns spec))
-      (coll? spec) (let [[ns-ref & rest] spec
-                         imported-ns (do
-                                       (assert (not (namespace ns-ref)))
-                                       (assert (even? (count rest)))
-                                       (import-ns ns-ref))]
+      (coll? spec) (let [[ns-ref & rest] spec]
+                     (assert (not (namespace ns-ref)))
+                     (assert (even? (count rest)))
+                     (import-ns ns-ref)
                      (doseq [[flag data] (partition 2 rest)]
                        (case flag
                          :as (do
                                (assert (and (symbol? data)
                                             (not (namespace data))))
                                (ohua-alias ns-ref (name data)))
-                         :refer (let [ns-str (name ns-ref)
-                                      data (case data
-                                             :all (map symbol imported-ns)
-                                             data)]
-                                  (doseq [sym data]
-                                    (assert (symbol? sym))
-                                    (ohua-alias (symbol ns-str (name sym)) (name sym))))
+                         :refer (let [ns-str (name ns-ref)]
+                                  (case data
+                                    :all (do (println (iterator-seq (.list backend (->ns-string ns-ref)))) (swap! (.refers_all (get-linker)) conj (->ns-string ns-ref)))
+                                    (doseq [sym data]
+                                      (assert (symbol? sym))
+                                      (ohua-alias (symbol ns-str (name sym)) (name sym)))))
                          (throw (new IllegalArgumentException (str "Unrecognized flag " flag))))))
-      :else (throw (new IllegalArgumentException (str "Spec must be symbol or sequence, not " (type spec)))))))
+      :else (throw (new IllegalArgumentException (str "Spec must be symbol or sequence, not " (type spec))))))
+  )
 
 (defmacro ohua-require [& args] (apply ohua-require-fn args))
 
