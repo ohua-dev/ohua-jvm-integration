@@ -29,6 +29,7 @@ import System.IO.Unsafe
 import System.IO
 import Ohua.Compat.JVM.ClojureST as ClST
 import qualified Data.Text as T
+import Data.Monoid ((<>))
 
 instance Show Object where show = fromJString . toString
 
@@ -51,7 +52,7 @@ not_implemented = error "This function is not (yet) implemented"
 
 instance NativeConverter QualifiedBinding where
     type NativeType QualifiedBinding = JString
-    toNative (QualifiedBinding ns name) = toNative $ T.intercalate "/" (map unBinding $ nsRefToList ns) `T.append` (unBinding name)
+    toNative (QualifiedBinding ns name) = toNative $ T.intercalate "." (map unBinding $ nsRefToList ns) <> "/" <> (unBinding name)
     fromNative = either error expectQual . symbolFromString . fromNative
       where 
         expectQual (Qual q) = q
@@ -209,8 +210,11 @@ instance NativeConverter Operator where
     type NativeType Operator = NOperator
     toNative (Operator id t) = newNOperator (toNative id) (toNative t)
     fromNative = not_implemented
+    -- fromNative op = Operator (fromNative (nOperatorId op)) (fromNative (nOperatorType op))
 
 foreign import java "@new" newNOperator :: JInteger -> JString -> NOperator
+-- foreign import java "@field id" nOperatorId :: NOperator -> JInteger
+-- foreign import java "@field type" nOperatorType :: NOperator -> JString
 
 data {-# CLASS "ohua.graph.Operator[]" #-} NOperatorArr = NOperatorArr (Object# NOperatorArr) deriving Class
 
@@ -222,18 +226,24 @@ instance NativeConverter a => NativeConverter (Source a) where
     type NativeType (Source a) = NSource (NativeType a)
     toNative (LocalSource t) = superCast $ newNLocalSource $ toNative t
     toNative (EnvSource e) = superCast $ newNEnvSource $ toNative e
-    fromNative = not_implemented
+    fromNative s = not_implemented
+        -- case (safeDowncast s, safeDowncast s) of
+        --     (Just loc, _) -> LocalSource $ fromNative $ nLocalSourceTarget loc
+        --     (_, Just env) -> EnvSource $ fromNative $ nEnvSourceHostExpr env
+        --     _ -> error "Could not coerce source"
 
 
 data {-# CLASS "ohua.graph.Source$Local" #-} NLocalSource a = NLocalSource (Object# (NLocalSource a)) deriving Class
     
 type instance Inherits (NLocalSource a) = '[NSource a]
 foreign import java "@new" newNLocalSource :: NTarget -> NLocalSource a
+-- foreign import java  "@field target" nLocalSourceTarget :: NLocalSource a -> NTarget
 
 data {-# CLASS "ohua.graph.Source$Env" #-} NEnvSource a = NEnvSource (Object# (NEnvSource a)) deriving Class
 
 type instance Inherits (NEnvSource a) = '[NSource a]
 foreign import java "@new" newNEnvSource :: (a <: Object) => a -> NEnvSource a
+-- foreign import java "@field hostExpr" nEnvSourceHostExpr :: NEnvSource a -> a
 
 data {-# CLASS "ohua.graph.Arc" #-} NArc a = NArc (Object# (NArc a)) deriving Class
 

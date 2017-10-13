@@ -112,7 +112,7 @@
                                (ohua-alias ns-ref (name data)))
                          :refer (let [ns-str (name ns-ref)]
                                   (case data
-                                    :all (do (println (iterator-seq (.list backend (->ns-string ns-ref)))) (swap! (.refers_all (get-linker)) conj (->ns-string ns-ref)))
+                                    :all (swap! (.refers_all (get-linker)) conj (->ns-string ns-ref))
                                     (doseq [sym data]
                                       (assert (symbol? sym))
                                       (ohua-alias (symbol ns-str (name sym)) (name sym)))))
