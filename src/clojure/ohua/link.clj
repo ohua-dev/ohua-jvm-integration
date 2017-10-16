@@ -35,6 +35,7 @@
     :else (throw (new IllegalArgumentException (str "ns-name must be symbol or string, not " (if (nil? ns-name) "nil" (type ns-name)))))))
 
 (defn import-ns [ns-name]
+  (create-ns (symbol ns-name)) ; temporary, use a custom `macroexpand` instead
   (swap! (.-imported_namespaces (get-linker)) conj (->ns-string ns-name)))
 
 (defn is-imported? [ns-name]

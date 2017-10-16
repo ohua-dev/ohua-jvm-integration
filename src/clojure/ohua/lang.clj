@@ -1,7 +1,8 @@
 (ns ohua.lang
   (:require [clojure.set :as set]
             [clojure.string :as str]
-            [ohua.link]))
+            [ohua.link]
+            [clojure.walk :refer [macroexpand-all]]))
 
 
 (defmacro defalgo []
@@ -10,15 +11,17 @@
 
 
 (defn ohua-fn [code option]
-  (case code
-    :import (do
-              (println "Using the :import version of the ohua macro is deprecated")
-              (apply ohua.link/ohua-require-fn (map (fn [ns_] [ns_ :refer :all]) option)))
-    (let [_ (println code)
+  (if (= :import code)
+    (do
+      (println "Using the :import version of the ohua macro is deprecated")
+      (apply ohua.link/ohua-require-fn (map (fn [ns_] [ns_ :refer :all]) option)))
+    (let [_ (println (macroexpand-all code))
           graph (ohua.Compiler/compileAndSpliceEnv
                   ohua.link/clj-linker
-                  code)]
-      (ohua.Runtime/prepare graph))))
+                  (macroexpand-all code))
+          prepared-rt-sym (gensym "graph")]
+      (intern *ns* prepared-rt-sym (ohua.Runtime/prepare graph))
+      `(.run ~prepared-rt-sym))))
 
 
 (defmacro ohua

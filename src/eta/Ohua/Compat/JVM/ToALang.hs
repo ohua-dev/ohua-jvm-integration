@@ -42,6 +42,8 @@ instance ToBinding Binding where toBinding = id
 instance ToBinding ClST.Symbol where toBinding = symToBinding
 
 letSym = Symbol Nothing "let"
+letStarSym = Symbol Nothing "let*"
+isLetSym a = a == letSym || a == letStarSym
 fnSym = Symbol Nothing "fn"
 
 
@@ -83,7 +85,7 @@ toALang reg st = (\(a, s, ()) -> (a, s)) <$> runRWST (go st) (noDeclaredSymbols,
                 isSf s >>= maybe (toEnvRef s) (return . (`Sf` Nothing))
     go (Vec v) = Var <$> toEnvRef v
     go (Form []) = failWith "Empty form"
-    go (Form (Sym l:rest)) | l == letSym =
+    go (Form (Sym l:rest)) | isLetSym l =
         case rest of
             Vec v:statements -> handleLet (handleStatements statements) (partition 2 $ vectorToList v)
             _ -> failWith "Expected binding vector"
