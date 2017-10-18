@@ -35,14 +35,15 @@
          ; 6 ops + 5 arcs + 1 op with arg + exec stmt
        14)))
 
-(deftest webserver-threading
-  "testing the threading macro"
-  []
-  (test/is
-    (= (count
-         (ohua (-> "port01" accept read parse load write send) :test))
-         ; init stmt + 6 ops + 5 arcs + 1 op with arg + exec stmt
-         14)))
+; reenable once we've got macrosupport again (see lang.clj)
+; (deftest webserver-threading
+;   "testing the threading macro"
+;   []
+;   (test/is
+;     (= (count
+;          (ohua (-> "port01" accept read parse load write send) :test))
+;          ; init stmt + 6 ops + 5 arcs + 1 op with arg + exec stmt
+;          14)))
 
 (deftest output-ports
   "test for output port detection"
@@ -127,18 +128,19 @@
          10))
       ))
 
-(deftest arguments-function
-  "testing the detection of arguments"
-  []
-  (l/enable-compilation-logging)
-  (test/is
-    (= (count
-         (ohua (let [out-1 (accept "port01")
-                     out-2 (accept "port02")]
-                 (read out-1 out-2 "arg1" (fn [] [1 2 3]))) :test-compile))
-       ; init stmt + 3 ops + 2 arcs + 3 ops with args + compile stmt
-       10))
-  )
+; disabled, functions are currently not allowed as arguments. we may chose to trigger on `algo` instead which allows this again
+; (deftest arguments-function
+;   "testing the detection of arguments"
+;   []
+;   (l/enable-compilation-logging)
+;   (test/is
+;     (= (count
+;          (ohua (let [out-1 (accept "port01")
+;                      out-2 (accept "port02")]
+;                  (read out-1 out-2 "arg1" (fn [] [1 2 3]))) :test-compile))
+;        ; init stmt + 3 ops + 2 arcs + 3 ops with args + compile stmt
+;        10))
+;   )
 
 (deftest multiple-arcs-from-one-source
   "testing multiple arcs depending on the same source operator"

@@ -47,9 +47,8 @@ isLetSym a = a == letSym || a == letStarSym
 fnSym = Symbol Nothing "fn"
 
 
-data SfRegistry = SfRegistry
-    { registryResolve :: Binding -> Maybe QualifiedBinding
-    }
+newtype SfRegistry = SfRegistry
+    { registryResolve :: Binding -> Maybe QualifiedBinding }
 
 newtype DeclaredSymbols = DeclaredSymbols { unwrapDeclaredSymbols :: HS.HashSet Binding }
 

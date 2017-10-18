@@ -18,7 +18,7 @@
     (let [_ (println (macroexpand-all code))
           graph (ohua.Compiler/compileAndSpliceEnv
                   ohua.link/clj-linker
-                  (macroexpand-all code))
+                  code) ; macroexpand this at some point to get support for macros
           prepared-rt-sym (gensym "graph")]
       (intern *ns* prepared-rt-sym (ohua.Runtime/prepare graph))
       `(.run ~prepared-rt-sym))))
