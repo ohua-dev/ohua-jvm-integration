@@ -16,6 +16,7 @@ import Data.Sequence as Seq
 import Ohua.ALang.Lang
 import Control.DeepSeq
 import Ohua.Util
+import Ohua.Compat.JVM.ClojureST
 
 
 
@@ -24,6 +25,7 @@ data {-# CLASS "ohua.Compiler" #-} NCompiler = NCompiler (Object# NCompiler) der
 data {-# CLASS "ohua.Linker" #-} IsLinker = IsLinker (Object# IsLinker) deriving Class
 
 foreign import java unsafe "@interface resolve" linkerResolveUnqualified :: String -> Java IsLinker (Maybe JString)
+foreign import java unsafe "@interface resolveAlgo" linkerResolveAlgo :: String -> Java IsLinker (Maybe NAlgo)
 
 forceA :: (NFData a, Applicative m) => a -> m ()
 forceA = (`deepseq` pure ())
@@ -34,7 +36,7 @@ basicCompile linker thing = do
     let st = fromNative thing
     forceAndReport "ST was valid" st
     compiled <- fmap (either (error . T.unpack) id) . (`runOhuaT0IO` definedBindings st) $ do
-        (alang, envExprs) <- toALang registry st
+        (alang, envExprs) <- toALang (mkRegistry linker) st
         forceAndReport "alang converted" alang
         liftIO $ print alang
         -- liftIO $ writeFile "alang-dump" $ show alang
@@ -43,10 +45,16 @@ basicCompile linker thing = do
         pure (graph, envExprs)
     forceAndReport "Compilation done" $ fst compiled
     pure compiled
+
+
+mkRegistry :: IsLinker -> Registry
+mkRegistry linker = 
+    Registry 
+        (withNativeLinker linkerResolveUnqualified)
+        (withNativeLinker linkerResolveAlgo)
   where
-    registry =
-        SfRegistry
-        (fmap fromNative . pureJavaWith linker . linkerResolveUnqualified . bndToString)
+    withNativeLinker :: (Functor f, NativeConverter b) => (String -> Java IsLinker (f (NativeType b))) -> Binding -> f b
+    withNativeLinker f = (fmap fromNative . pureJavaWith linker . f . bndToString)
     bndToString = T.unpack . unBinding
     stringToBinding = Binding . T.pack
 
@@ -61,6 +69,14 @@ nativeCompileWSplice linker thing = do
     return $ toNative $ spliceEnv graph (Seq.index envExprs)
 
 
+nativeCompileAlgo :: IsLinker -> Object -> IO NAlgo
+nativeCompileAlgo linker thing =
+    fmap (either (error . T.unpack) (toNative . uncurry Algo)) 
+        . (`runOhuaT0IO` definedBindings st) 
+        $ toALang (mkRegistry linker) st 
+  where st = fromNative thing
+
+
 -- nativeToAlang :: Object -> IO ()
 -- nativeToAlang = either error (\(alang, objects) -> print alang >> print (toList objects)) . (\st -> runOhuaT0 (toALang st) (definedBindings st)) . fromNative
 
@@ -68,5 +84,7 @@ nativeCompileWSplice linker thing = do
 foreign export java "@static ohua.Compiler.compile" nativeCompile :: IsLinker -> Object -> IO (NGraph JInteger)
 
 foreign export java "@static ohua.Compiler.compileAndSpliceEnv" nativeCompileWSplice :: IsLinker -> Object -> IO (NGraph Object)
+
+foreign export java "@static ohua.Compiler.compileAlgo" nativeCompileAlgo :: IsLinker -> Object -> IO NAlgo
 
 -- foreign export java "@static ohua.Compiler.testToALang" nativeToAlang :: Object -> IO ()

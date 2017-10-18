@@ -30,6 +30,8 @@ import System.IO
 import Ohua.Compat.JVM.ClojureST as ClST
 import qualified Data.Text as T
 import Data.Monoid ((<>))
+import qualified Data.Sequence as S
+import Data.Foldable (toList)
 
 instance Show Object where show = fromJString . toString
 
@@ -272,6 +274,17 @@ instance NativeConverter Object where
     type NativeType Object = Object
     fromNative = id
     toNative = id
+
+data {-# CLASS "ohua.Algo" #-} NAlgo = NAlgo (Object# NAlgo) deriving Class
+
+foreign import java "@new" newNAlgo :: NExpr -> JObjectArray -> NAlgo
+foreign import java "@field code" nAlgoCode :: NAlgo -> NExpr
+foreign import java "@field envExprs" nAlgoEnvExprs :: NAlgo -> JObjectArray
+
+instance NativeConverter Algo where
+    type NativeType Algo = NAlgo
+    toNative (Algo code exprs) = newNAlgo (toNative code) (toJava $ toList exprs)
+    fromNative o = Algo (fromNative $ nAlgoCode o) (S.fromList $ fromJava $ nAlgoEnvExprs o)
 
 asBool :: Object -> Bool
 asBool !o = (fromJava :: JBoolean -> Bool) . unsafeCast $ o

@@ -127,4 +127,6 @@
 (def clj-linker
   (reify ohua.Linker
     (resolve [_ n]
-      (resolve n))))
+      (resolve n))
+    (resolveAlgo [_ s]
+      (clojure.core/resolve (symbol s)))))

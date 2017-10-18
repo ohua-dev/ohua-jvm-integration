@@ -24,7 +24,7 @@ deriving instance Show Vector
 main = do
     !r <- Clojure.read "(let [a (print b)] a)"
     let converted = fromNative r
-    let reg = simpleRegistry [("print", "some.module/print"), ("some.module/print", "some.module/print")]
+    let reg = simpleRegistry [("print", "some.module/print"), ("some.module/print", "some.module/print")] []
     hPutStrLn stderr $ fromJava $ toString r
     converted `deepseq` return ()
     hPutStrLn stderr $ show converted

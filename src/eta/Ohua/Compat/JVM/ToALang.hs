@@ -1,3 +1,4 @@
+{-# LANGUAGE ConstraintKinds #-}
 module Ohua.Compat.JVM.ToALang where
 
 
@@ -14,6 +15,7 @@ import qualified Data.Text                 as T
 import           Java
 import           Lens.Micro
 import           Lens.Micro.Mtl
+import           Lens.Micro.Internal
 import           Ohua.ALang.Lang
 import           Ohua.Compat.JVM.ClojureST as ClST
 import           Ohua.Compat.JVM.Marshal
@@ -22,18 +24,6 @@ import           Ohua.Types
 import           Ohua.Util
 
 
-class HasDeclaredSymbols s where
-    declaredSymbols :: Lens' s DeclaredSymbols
-
-
-instance HasDeclaredSymbols (DeclaredSymbols, b, c) where
-    declaredSymbols = _1
-
-class HasSfRegistry s where
-    sfRegistry :: Lens' s SfRegistry
-
-instance HasSfRegistry (a, SfRegistry, c) where
-    sfRegistry = _2
 
 class ToBinding b where
     toBinding :: b -> Binding
@@ -47,8 +37,10 @@ isLetSym a = a == letSym || a == letStarSym
 fnSym = Symbol Nothing "fn"
 
 
-newtype SfRegistry = SfRegistry
-    { registryResolve :: Binding -> Maybe QualifiedBinding }
+data Registry = Registry
+    { registryResolveSf :: Binding -> Maybe QualifiedBinding 
+    , registryResolveAlgo :: Binding -> Maybe Algo
+    }
 
 newtype DeclaredSymbols = DeclaredSymbols { unwrapDeclaredSymbols :: HS.HashSet Binding }
 
@@ -62,26 +54,41 @@ partition i l = pref:partition i rest
     (pref, rest) = splitAt i l
 
 
-isDefined :: (MonadReader r m, HasDeclaredSymbols r, ToBinding b) => b -> m Bool
-isDefined b = asks (HS.member (toBinding b) . unwrapDeclaredSymbols . (^. declaredSymbols))
+type Field1' s a = Field1 s s a a
+type Field2' s a = Field2 s s a a
 
 
-isSf :: (MonadReader r m, HasSfRegistry r, ToBinding b) => b -> m (Maybe QualifiedBinding)
-isSf b' = (($ b) . registryResolve) <$> view sfRegistry
+isDefined :: (MonadReader r m, Field1' r DeclaredSymbols, ToBinding b) => b -> m Bool
+isDefined b = asks (HS.member (toBinding b) . unwrapDeclaredSymbols . (^. _1))
+
+
+isSf :: (MonadReader r m, Field2' r Registry, ToBinding b) => b -> m (Maybe QualifiedBinding)
+isSf b' = (($ b) . registryResolveSf) <$> view _2
   where b = toBinding b'
 
 
-toALang :: MonadOhua m => SfRegistry -> ST -> m (Expression, Seq Object)
-toALang reg st = (\(a, s, ()) -> (a, s)) <$> runRWST (go st) (noDeclaredSymbols, reg, ()) mempty
+isAlgo :: (MonadReader r m, Field2' r Registry, ToBinding b) => b -> m (Maybe Algo)
+isAlgo b' = (($ b) . registryResolveAlgo) <$> view _2
+  where b = toBinding b'
+
+
+toALang :: MonadOhua env m => Registry -> ST -> m (Expression, Seq Object)
+toALang reg st = (\(a, (s, _), ()) -> (a, s)) <$> runRWST (go st) (noDeclaredSymbols, reg) (mempty, mempty)
   where
     go (Literal o) = Var <$> toEnvRef o
     go (Sym s) = do
         isLocal <- isDefined s
-        Var <$>
-            if isLocal then
-                Local <$> expectUnqual s
-            else
-                isSf s >>= maybe (toEnvRef s) (return . (`Sf` Nothing))
+        
+        if isLocal then
+            Var . Local <$> expectUnqual s
+        else do
+            msf <- isSf s
+            malgo <- isAlgo s
+            case (msf, malgo) of
+                (Just _, Just _) -> failWith $ "ambiguous reference" <> showT s
+                (Just sf, Nothing) -> pure $ Var $ Sf sf Nothing
+                (Nothing, Just algo) -> integrateAlgo s algo
+                (Nothing, Nothing) -> Var <$> toEnvRef s
     go (Vec v) = Var <$> toEnvRef v
     go (Form []) = failWith "Empty form"
     go (Form (Sym l:rest)) | isLetSym l =
@@ -125,17 +132,34 @@ toALang reg st = (\(a, s, ()) -> (a, s)) <$> runRWST (go st) (noDeclaredSymbols,
     handleStatements (stmt:rest) = Let <$> (Direct <$> generateBindingWith "_") <*> go stmt <*> handleStatements rest
 
     toEnvRef thing = do
-        i <- gets S.length
-        modify (|> (toEnvExpr thing :: Object))
-        return $ Env $ HostExpr i
+        i <- S.length <$> use _1
+        _1 %= (|> (toEnvExpr thing :: Object))
+        pure $ Env $ HostExpr i
 
-    registerBnds bnds = local (declaredSymbols %~ DeclaredSymbols . HS.union (HS.fromList bnds) . unwrapDeclaredSymbols)
+    registerBnds bnds = local (_1 %~ DeclaredSymbols . HS.union (HS.fromList bnds) . unwrapDeclaredSymbols)
     registerAssign assign = registerBnds $ flattenAssign assign
 
 
+integrateAlgo :: (MonadState s m, Field1' s (S.Seq Object), Field2' s (HM.HashMap ClST.Symbol Expression)) => ClST.Symbol -> Algo -> m Expression
+integrateAlgo aname (Algo code envExprs) = do
+    cached <- gets (^? _2 . ix aname)
+    case cached of
+        Just a -> pure a
+        Nothing -> do
+            i <- S.length <$> use _1 
+            _1 %= (<> envExprs)
+            let adjusted = shiftEnvExprs i code
+            _2 . at aname .= Just adjusted
+            pure adjusted
 
 
-bndToFnName :: MonadOhua m => Binding -> m QualifiedBinding
+shiftEnvExprs :: Int -> Expression -> Expression
+shiftEnvExprs offset = lrMapRefs $ \case 
+    Env (HostExpr i) -> Env $ HostExpr $ i + offset
+    a -> a
+
+
+bndToFnName :: MonadOhua env m => Binding -> m QualifiedBinding
 bndToFnName (Binding b) =
     case symbolFromString b of
         Left err -> failWith $ T.pack err

@@ -5,6 +5,8 @@ import           Control.DeepSeq
 import           Data.Hashable
 import qualified Data.Text       as T
 import           Java
+import Ohua.ALang.Lang (Expression)
+import qualified Data.Sequence as S
 
 
 data ST
@@ -48,3 +50,6 @@ class ToEnvExpr a where
 
 instance ToEnvExpr Object where
     toEnvExpr = id
+
+
+data Algo = Algo !Expression !(S.Seq Object)

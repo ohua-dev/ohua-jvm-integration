@@ -5,9 +5,18 @@
             [clojure.walk :refer [macroexpand-all]]))
 
 
-(defmacro defalgo []
-          ; TODO
-          )
+(defmacro algo [args & code]
+  (let [a (ohua.Compiler/compileAlgo
+            ohua.link/clj-linker
+            (conj 'fn ; perhaps this should be `algo`
+              (conj args code)))
+        a-name (gensym "algo")])
+    (intern a-name a)
+    a)
+
+
+(defmacro defalgo [name & code]
+  `(def ~name (algo ~@code)))
 
 
 (defn ohua-fn [code option]
@@ -15,8 +24,7 @@
     (do
       (println "Using the :import version of the ohua macro is deprecated")
       (apply ohua.link/ohua-require-fn (map (fn [ns_] [ns_ :refer :all]) option)))
-    (let [_ (println (macroexpand-all code))
-          graph (ohua.Compiler/compileAndSpliceEnv
+    (let [graph (ohua.Compiler/compileAndSpliceEnv
                   ohua.link/clj-linker
                   code) ; macroexpand this at some point to get support for macros
           prepared-rt-sym (gensym "graph")]
