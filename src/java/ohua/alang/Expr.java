@@ -2,6 +2,10 @@ package ohua.alang;
 
 import ohua.types.*;
 
+
+/**
+ * Java version of the "normal" version of alang expressions.
+ */
 public abstract class Expr {
     public final static class Let extends Expr {
         public final Assignment assignment;

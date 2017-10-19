@@ -7,8 +7,7 @@
 ;
 
 (ns ohua.link
-  (:require [clojure.string :as string]
-            [ohua.util.loader :refer [load-from-classpath]])
+  (:require [clojure.string :as string])
   (:import (clojure.lang Symbol Var)
            (ohua StatefulFunctionProvider Algo)
            (ohua.loader MultiDispatchSFProvider JavaProviderFromAnnotatedMethod)))

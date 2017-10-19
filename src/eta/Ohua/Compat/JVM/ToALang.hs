@@ -31,10 +31,23 @@ class ToBinding b where
 instance ToBinding Binding where toBinding = id
 instance ToBinding ClST.Symbol where toBinding = symToBinding
 
+letSym, letStarSym, algoSym, fnSym, fnStarSym :: ClST.Symbol
+
+isLetSym, isAlgoSym :: ClST.Symbol -> Bool
+
 letSym = Symbol Nothing "let"
 letStarSym = Symbol Nothing "let*"
-isLetSym a = a == letSym || a == letStarSym
+isLetSym a 
+    =  a == letSym 
+    || a == letStarSym
 fnSym = Symbol Nothing "fn"
+fnStarSym = Symbol Nothing "fn*"
+algoSym = Symbol Nothing "algo"
+isAlgoSym s
+    =  s == algoSym
+    || s == fnSym
+    || s == fnStarSym
+
 
 
 data Registry = Registry
@@ -91,11 +104,18 @@ toALang reg st = (\(a, (s, _), ()) -> (a, s)) <$> runRWST (go st) (noDeclaredSym
                 (Nothing, Nothing) -> Var <$> toEnvRef s
     go (Vec v) = Var <$> toEnvRef v
     go (Form []) = failWith "Empty form"
-    go (Form (Sym l:rest)) | isLetSym l =
+    go (Form (Sym l:rest)) | isLetSym l = do
+        when (l == letStarSym) $ 
+            recordWarning "let should not be expanded to `let*`. \
+                          \When macroexpanding use `ohua.util/macroexpand-all` instead."
         case rest of
             Vec v:statements -> handleLet (handleStatements statements) (partition 2 $ vectorToList v)
             _ -> failWith "Expected binding vector"
-    go (Form (Sym fn:rest)) | fn == fnSym =
+    -- NOTE: This assumes a form of `(algo [] ...)` (or `(fn [] ...)`) it currently does not handle 
+    -- things like `(fn ([] ...))` perhaps we should ...
+    go (Form (Sym fn:rest)) | isAlgoSym fn = do
+        when (fn == fnSym || fn == fnStarSym) $
+            recordWarning "DEPRECATED: The use of `fn` is deprecated, use `algo` instead."
         case rest of
             Vec v:statements -> do
                 assigns <- mapM handleAssign (vectorToList v)
