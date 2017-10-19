@@ -10,7 +10,7 @@
   (:require [clojure.string :as string]
             [ohua.util.loader :refer [load-from-classpath]])
   (:import (clojure.lang Symbol Var)
-           (ohua StatefulFunctionProvider)
+           (ohua StatefulFunctionProvider Algo)
            (ohua.loader MultiDispatchSFProvider JavaProviderFromAnnotatedMethod)))
 
 
@@ -129,4 +129,7 @@
     (resolve [_ n]
       (resolve n))
     (resolveAlgo [_ s]
-      (clojure.core/resolve (symbol s)))))
+      (if-let [a (clojure.core/resolve (symbol s))]
+        (let [a- (var-get a)]
+          (if (= (type a-) Algo)
+            a-))))))

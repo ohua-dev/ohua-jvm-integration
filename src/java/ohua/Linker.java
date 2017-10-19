@@ -10,4 +10,5 @@ public interface Linker {
      * input name or null if no stateful function with this name is in scope.
      */
     String resolve(String name);
+    Algo resolveAlgo(String name);
 }

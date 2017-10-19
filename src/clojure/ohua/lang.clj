@@ -10,9 +10,9 @@
             ohua.link/clj-linker
             (conj 'fn ; perhaps this should be `algo`
               (conj args code)))
-        a-name (gensym "algo")])
+        a-name (gensym "algo")]
     (intern a-name a)
-    a)
+    a))
 
 
 (defmacro defalgo [name & code]

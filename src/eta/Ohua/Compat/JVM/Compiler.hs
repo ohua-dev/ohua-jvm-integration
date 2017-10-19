@@ -44,6 +44,7 @@ basicCompile linker thing = do
         forceAndReport "graph created" graph
         pure (graph, envExprs)
     forceAndReport "Compilation done" $ fst compiled
+    print $ fst compiled
     pure compiled
 
 

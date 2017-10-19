@@ -1,5 +1,6 @@
 package ohua;
 
+import ohua.alang.*;
 
 public final class Algo {
     public final Expr code;
