@@ -13,7 +13,7 @@
   [args & code]
   (let [a (ohua.Compiler/compileAlgo
             ohua.link/clj-linker
-            (conj 'fn ; perhaps this should be `algo`
+            (conj 'algo ; perhaps this should be `algo`
               (conj args code)))
         a-name (gensym "algo")]
     (intern a-name a)
