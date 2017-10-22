@@ -17,6 +17,7 @@ import Ohua.ALang.Lang
 import Control.DeepSeq
 import Ohua.Util
 import Ohua.Compat.JVM.ClojureST
+import Ohua.DFGraph.Show
 
 
 
@@ -44,7 +45,7 @@ basicCompile linker thing = do
         forceAndReport "graph created" graph
         pure (graph, envExprs)
     forceAndReport "Compilation done" $ fst compiled
-    print $ fst compiled
+    printAsTable $ fst compiled
     pure compiled
 
 

@@ -54,15 +54,27 @@
   (if (is-aliased? alias-ref) (println "Already has registered ref for " (str alias-ref)))
   (register-alias-bare alias-ref qual-ref))
 
-(def backend (MultiDispatchSFProvider/combine (into-array StatefulFunctionProvider [
-  (JavaProviderFromAnnotatedMethod.)
-  ; (reify StatefulFunctionProvider
-  ;   (provide [this ns-ref sf-ref]
-  ;     ; create a stateful function object
-  ;     (clojure.core/resolve (symbol ns-ref sf-ref)))
-  ;   (exists [this ns-ref sf-ref]
-  ;     (not (nil? (clojure.core/resolve (symbol ns-ref sf-ref))))))
-  ])))
+(def backend 
+  ; (MultiDispatchSFProvider/combine (into-array StatefulFunctionProvider [
+    (JavaProviderFromAnnotatedMethod.)
+    ; (reify StatefulFunctionProvider
+    ;   (provide [this ns-ref sf-ref]
+    ;     ; create a stateful function object
+    ;     (clojure.core/resolve (symbol ns-ref sf-ref)))
+    ;   (exists [this ns-ref sf-ref]
+    ;     (not (nil? (clojure.core/resolve (symbol ns-ref sf-ref))))))
+  ; ]))
+  )
+
+(require '[clojure.pprint :as pprint])
+
+(defn print-loaded-methods [ns-ref]
+  (pprint/print-table 
+    (for [m (.getMethods backend ns-ref)]
+      {:return-type (.getGenericReturnType m) 
+       :name (.getName m) 
+       :parameters (into [] (.getGenericParameterTypes m))
+       :class (.getDeclaringClass m)})))
 
 (defn ohua-unalias [sym]
   (if (and (symbol? sym) (not (nil? (namespace sym))))

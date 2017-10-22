@@ -38,9 +38,17 @@
     (let [graph (ohua.Compiler/compileAndSpliceEnv
                   ohua.link/clj-linker
                   (macroexpand-all code))
-          prepared-rt-sym (gensym "graph")]
-      (intern *ns* prepared-rt-sym (ohua.Runtime/prepare graph))
-      `(.run ~prepared-rt-sym))))
+          mk-qual (fn [thing] (if (namespace thing) thing (symbol (str *ns*) (name thing))))]
+      (if (= :test-compile option)
+        (let [gr-sym (gensym "graph")] 
+          (intern *ns* gr-sym graph)
+          (mk-qual gr-sym))
+        (let [rt-sym (gensym "ohua-generated-runnable")] 
+          (intern *ns* rt-sym (ohua.Runtime/prepare graph))
+          `(.run ~(mk-qual rt-sym)))))))
+
+
+(defmacro ohua-require [& code] `(ohua.link/ohua-require ~@code))
 
 
 (defmacro ohua
