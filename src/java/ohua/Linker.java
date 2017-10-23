@@ -13,10 +13,20 @@ public interface Linker {
     String resolve(String name);
     /**
      * Resolve an algo.
-     * Returns an `Algo` structure capturing the copiled alang code for the algo
-     * as well as an array of objects that represent any constant input values.
+     * Returns an `Algo` structure capturing the compiled alang code for the algo
+     * as well as an array of objects that represent the constant input values.
      * 
      * If no algo was found returns `null`.
      */
     Algo resolveAlgo(String name);
+    /**
+     * Return a string representation of an environment expression.
+     * The default implementation simply calls `toString` on its input.
+     */
+    default String showExpr(Object expr) {
+        return expr.toString();
+    }
+    default Object eval(Object expr) {
+        return expr;
+    }
 }

@@ -15,10 +15,15 @@
 
 (def ^:private ohua-linker-ref :__ohua-linker)
 
+(declare ohua-require-fn)
 
 (deftype Linker [alias-registry imported-namespaces refers-all])
 (defn- mk-linker [] (->Linker (atom {}) (atom #{}) (atom #{})))
-(defn- init-linker [] (let [l (mk-linker)] (alter-meta! *ns* assoc ohua-linker-ref l) l))
+(defn- init-linker [] 
+  (let [l (mk-linker)] 
+    (alter-meta! *ns* assoc ohua-linker-ref l)
+    (ohua-require-fn '[ohua.lang :refer :all])
+    l))
 
 
 (defn ^Linker get-linker []
@@ -143,4 +148,5 @@
       (if-let [a (clojure.core/resolve (symbol s))]
         (let [a- (var-get a)]
           (if (= (type a-) Algo)
-            a-))))))
+            a-))))
+    (eval [_ thing] (eval thing))))

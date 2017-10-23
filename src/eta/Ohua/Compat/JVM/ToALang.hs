@@ -1,4 +1,5 @@
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE DeriveFunctor #-}
 module Ohua.Compat.JVM.ToALang where
 
 
@@ -30,6 +31,13 @@ class ToBinding b where
 
 instance ToBinding Binding where toBinding = id
 instance ToBinding ClST.Symbol where toBinding = symToBinding
+
+newtype Unevaluated a = Unevaluated { unwrapUnevaluated :: a } deriving (Functor, Show, Eq)
+
+type Evaluator a b = Unevaluated a -> b
+
+createEvaluator :: (a -> b) -> Evaluator a b
+createEvaluator f = f . unwrapUnevaluated
 
 letSym, letStarSym, algoSym, fnSym, fnStarSym :: ClST.Symbol
 
@@ -85,7 +93,7 @@ isAlgo b' = (($ b) . registryResolveAlgo) <$> view _2
   where b = toBinding b'
 
 
-toALang :: MonadOhua env m => Registry -> ST -> m (Expression, Seq Object)
+toALang :: MonadOhua Object m => Registry -> ST -> m (Expression, Seq (Either (Unevaluated Object) Object))
 toALang reg st = (\(a, (s, _), ()) -> (a, s)) <$> runRWST (go st) (noDeclaredSymbols, reg) (mempty, mempty)
   where
     go (Literal o) = Var <$> toEnvRef o
@@ -153,21 +161,21 @@ toALang reg st = (\(a, (s, _), ()) -> (a, s)) <$> runRWST (go st) (noDeclaredSym
 
     toEnvRef thing = do
         i <- S.length <$> use _1
-        _1 %= (|> (toEnvExpr thing :: Object))
+        _1 %= (|> Left (Unevaluated $ toEnvExpr thing))
         pure $ Env $ HostExpr i
 
     registerBnds bnds = local (_1 %~ DeclaredSymbols . HS.union (HS.fromList bnds) . unwrapDeclaredSymbols)
     registerAssign assign = registerBnds $ flattenAssign assign
 
 
-integrateAlgo :: (MonadState s m, Field1' s (S.Seq Object), Field2' s (HM.HashMap ClST.Symbol Expression)) => ClST.Symbol -> Algo -> m Expression
+integrateAlgo :: (MonadState s m, Field1' s (Seq (Either (Unevaluated Object) Object)), Field2' s (HM.HashMap ClST.Symbol Expression)) => ClST.Symbol -> Algo -> m Expression
 integrateAlgo aname (Algo code envExprs) = do
     cached <- gets (^? _2 . ix aname)
     case cached of
         Just a -> pure a
         Nothing -> do
             i <- S.length <$> use _1 
-            _1 %= (<> envExprs)
+            _1 %= (<> fmap Right envExprs)
             let adjusted = shiftEnvExprs i code
             _2 . at aname .= Just adjusted
             pure adjusted

@@ -27,6 +27,7 @@ data {-# CLASS "ohua.Linker" #-} IsLinker = IsLinker (Object# IsLinker) deriving
 
 foreign import java unsafe "@interface resolve" linkerResolveUnqualified :: String -> Java IsLinker (Maybe JString)
 foreign import java unsafe "@interface resolveAlgo" linkerResolveAlgo :: String -> Java IsLinker (Maybe NAlgo)
+foreign import java unsafe "@interface eval" linkerEval :: Object -> Java IsLinker Object
 
 forceA :: (NFData a, Applicative m) => a -> m ()
 forceA = (`deepseq` pure ())
@@ -36,7 +37,7 @@ basicCompile linker thing = do
     putStrLn "Compiler is running"
     let st = fromNative thing
     forceAndReport "ST was valid" st
-    compiled <- fmap (either (error . T.unpack) id) . (`runOhuaT0IO` definedBindings st) $ do
+    (graph, envExprs) <- fmap (either (error . T.unpack) id) . (`runOhuaT0IO` definedBindings st) $ do
         (alang, envExprs) <- toALang (mkRegistry linker) st
         forceAndReport "alang converted" alang
         liftIO $ print alang
@@ -44,9 +45,13 @@ basicCompile linker thing = do
         graph <- pipeline alang
         forceAndReport "graph created" graph
         pure (graph, envExprs)
-    forceAndReport "Compilation done" $ fst compiled
-    printAsTable $ fst compiled
-    pure compiled
+    forceAndReport "Compilation done" graph
+    printAsTable $ graph
+    (graph,) <$> evalExprs linker envExprs
+
+
+evalExprs :: IsLinker -> Seq (Either (Unevaluated Object) Object) -> IO (Seq Object)
+evalExprs linker = mapM $ either (javaWith linker . linkerEval . unwrapUnevaluated) pure
 
 
 mkRegistry :: IsLinker -> Registry
@@ -72,10 +77,9 @@ nativeCompileWSplice linker thing = do
 
 
 nativeCompileAlgo :: IsLinker -> Object -> IO NAlgo
-nativeCompileAlgo linker thing =
-    fmap (either (error . T.unpack) (toNative . uncurry Algo)) 
-        . (`runOhuaT0IO` definedBindings st) 
-        $ toALang (mkRegistry linker) st 
+nativeCompileAlgo linker thing = do
+    (alang, envExprs) <- fmap (either (error . T.unpack) id) . (`runOhuaT0IO` definedBindings st) $ toALang (mkRegistry linker) st
+    toNative . Algo alang <$> evalExprs linker envExprs
   where st = fromNative thing
 
 

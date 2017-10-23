@@ -2,7 +2,8 @@
   (:require [clojure.set :as set]
             [clojure.string :as str]
             [ohua.link]
-            [ohua.util :refer [macroexpand-all]]))
+            [ohua.util :refer [macroexpand-all]])
+  (:import java.util.concurrent.atomic.AtomicReference))
 
 
 (defmacro algo 
@@ -20,6 +21,10 @@
     a))
 
 
+(defn report-option-type [option]
+  (throw (Exception. (str "Unexpected type of option. Exprected set, map or keyword, got " (type option)))))
+
+
 (defmacro defalgo 
   "I am rather happy with the new relationship between `algo` and `defalgo` since (as I wanted from the beginning)
    `(defalgo name [args] code)` is now literally the same as `(def name (algo [args] code))`."
@@ -30,22 +35,36 @@
 (defn ohua-fn 
   "Compile the code, create the graph, prepare the runtime and save the executable with a global, generated name.
    Returns code that invokes the saved executable when evaluated."
-  [code option]
+  [code option_]
   (if (= :import code)
     (do
       (println "Using the :import version of the ohua macro is deprecated")
-      (apply ohua.link/ohua-require-fn (map (fn [ns_] [ns_ :refer :all]) option)))
-    (let [graph (ohua.Compiler/compileAndSpliceEnv
+      (apply ohua.link/ohua-require-fn (map (fn [ns_] [ns_ :refer :all]) option_)))
+    (let [option (cond 
+                   (or (set? option_) (map? option_)) option_
+                   (keyword? option_) #{option_}
+                   :else (report-option-type option_))
+          mk-qual (fn [thing] (if (namespace thing) thing (symbol (str *ns*) (name thing))))
+          register #(intern *ns* %1 %2)
+          [code-with-capture final-code-modifier] 
+          (if (option :capture)
+            (let [ref (AtomicReference.)
+                  ref-sym (gensym "capture-ref")
+                  qual-ref-sym (mk-qual ref-sym)]
+              (register ref-sym ref)
+              [`(ohua.lang/capture ~code ~qual-ref-sym)
+               (fn [run] `(do ~run (.get ~qual-ref-sym)))])
+            [code identity])
+          graph (ohua.Compiler/compileAndSpliceEnv
                   ohua.link/clj-linker
-                  (macroexpand-all code))
-          mk-qual (fn [thing] (if (namespace thing) thing (symbol (str *ns*) (name thing))))]
-      (if (= :test-compile option)
+                  (macroexpand-all code-with-capture))]
+      (if (option :test-compile)
         (let [gr-sym (gensym "graph")] 
-          (intern *ns* gr-sym graph)
+          (register gr-sym graph)
           (mk-qual gr-sym))
         (let [rt-sym (gensym "ohua-generated-runnable")] 
-          (intern *ns* rt-sym (ohua.Runtime/prepare graph))
-          `(.run ~(mk-qual rt-sym)))))))
+          (register rt-sym (ohua.Runtime/prepare graph))
+          (final-code-modifier `(.run ~(mk-qual rt-sym))))))))
 
 
 (defmacro ohua-require [& code] `(ohua.link/ohua-require ~@code))
@@ -55,3 +74,15 @@
   "See `ohua-fn`."
   ([code] (ohua-fn code {}))
   ([code options] (ohua-fn code options)))
+
+
+(defmacro <-ohua
+  "See `ohua-fn`."
+  ([code] (ohua-fn code #{:capture}))
+  ([code options] 
+    (ohua-fn code
+      (cond 
+        (set? options) (conj options :capture)
+        (map? options) (assoc options :capture true)
+        (keyword? options) #{options :capture}
+        :else (report-option-type options)))))

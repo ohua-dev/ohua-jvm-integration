@@ -62,6 +62,7 @@ library
     , FlexibleInstances
     , TypeSynonymInstances
     , LambdaCase
+    , TupleSections
   if flag(debug)
     cpp-options: -DDEBUG=1
   maven-depends:
