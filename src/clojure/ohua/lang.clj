@@ -14,10 +14,10 @@
   [args & code]
   (let [a (ohua.Compiler/compileAlgo
             ohua.link/clj-linker
-            (conj 'algo ; perhaps this should be `algo`
-              (conj args code)))
+            (cons 'algo
+              (cons args code)))
         a-name (gensym "algo")]
-    (intern a-name a)
+    (intern *ns* a-name a)
     a))
 
 
@@ -26,7 +26,7 @@
 
 
 (defmacro defalgo 
-  "I am rather happy with the new relationship between `algo` and `defalgo` since (as I wanted from the beginning)
+  "I am rather happy with the new relationship between `algo` and `defalgo` since
    `(defalgo name [args] code)` is now literally the same as `(def name (algo [args] code))`."
   [name & code]
   `(def ~name (algo ~@code)))

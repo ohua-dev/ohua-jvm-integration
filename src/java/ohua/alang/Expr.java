@@ -37,9 +37,9 @@ public abstract class Expr {
         }
     }
     public final static class Var extends Expr {
-        public final Object value;
+        public final ResolvedSymbol value;
 
-        public Var(final Object value) {
+        public Var(final ResolvedSymbol value) {
             this.value = value;
         }
     }

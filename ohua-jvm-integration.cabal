@@ -52,7 +52,14 @@ library
   java-sources:        
     -- It's better not to depend on class files as they are generated
     -- I'd hope at some point we can depend on the clojure source directly
-      resources/ohua-jvm-runtime-0.1-SNAPSHOT.jar
+      resources/ohua-jvm-runtime-0.1-SNAPSHOT.jar,
+      src/java/ohua/alang/Assignment.java,
+      src/java/ohua/alang/ResolvedSymbol.java,
+      src/java/ohua/alang/Expr.java,
+      src/java/ohua/types/Binding.java,
+      src/java/ohua/types/FnName.java,
+      src/java/ohua/Algo.java,
+      src/java/ohua/Linker.java
   default-extensions:  
       OverloadedStrings
     , MultiParamTypeClasses
@@ -82,6 +89,15 @@ test-suite jvm-integration-tests
     , ohua-core
     , ohua-jvm-integration
     , text
+    , vector
+  java-sources:
+    src/java/ohua/alang/Assignment.java,
+    src/java/ohua/alang/ResolvedSymbol.java,
+    src/java/ohua/alang/Expr.java,
+    src/java/ohua/types/Binding.java,
+    src/java/ohua/types/FnName.java,
+    src/java/ohua/Algo.java,
+    src/java/ohua/Linker.java
 
   type:                exitcode-stdio-1.0
   default-extensions:  OverloadedStrings
