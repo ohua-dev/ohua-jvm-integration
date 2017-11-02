@@ -23,6 +23,7 @@ import           Ohua.Compat.JVM.Marshal
 import           Ohua.Monad
 import           Ohua.Types
 import           Ohua.Util
+import Ohua.DFLang.Lang (DFVar(DFEnvVar))
 
 
 
@@ -39,7 +40,7 @@ type Evaluator a b = Unevaluated a -> b
 createEvaluator :: (a -> b) -> Evaluator a b
 createEvaluator f = f . unwrapUnevaluated
 
-letSym, letStarSym, algoSym, fnSym, fnStarSym :: ClST.Symbol
+letSym, letStarSym, algoSym, fnSym, fnStarSym, ifSym :: ClST.Symbol
 
 isLetSym, isAlgoSym :: ClST.Symbol -> Bool
 
@@ -56,7 +57,29 @@ isAlgoSym s
     || s == fnSym
     || s == fnStarSym
 
+ifSym = Symbol Nothing "if"
 
+isIfSym = (== ifSym)
+
+
+unitHE :: HostExpr
+unitHE = HostExpr (-1)
+
+
+unitSym :: ResolvedSymbol
+unitSym = Env unitHE
+
+
+unitExpr :: AExpr s ResolvedSymbol
+unitExpr = Var unitSym
+
+
+dfVarUnit :: DFVar
+dfVarUnit = DFEnvVar unitHE
+
+
+ifFunc :: QualifiedBinding
+ifFunc = "ohua.lang/if"
 
 data Registry = Registry
     { registryResolveSf :: Binding -> Maybe QualifiedBinding 
@@ -94,9 +117,9 @@ isAlgo b' = (($ b) . registryResolveAlgo) <$> view _2
 
 
 toALang :: MonadOhua Object m => Registry -> ST -> m (Expression, Seq (Either (Unevaluated Object) Object))
-toALang reg st = (\(a, (s, _), ()) -> (a, s)) <$> runRWST (go st) (noDeclaredSymbols, reg) (mempty, mempty)
+toALang reg st = (\(a, (s, _, _, _), ()) -> (a, s)) <$> runRWST (go st) (noDeclaredSymbols, reg) (mempty, mempty, Nothing, 0 :: Int)
   where
-    go (Literal o) = Var <$> toEnvRef o
+    go (Literal o) = mkEnvExpr o
     go (Sym s) = do
         isLocal <- isDefined s
         
@@ -107,34 +130,62 @@ toALang reg st = (\(a, (s, _), ()) -> (a, s)) <$> runRWST (go st) (noDeclaredSym
             malgo <- isAlgo s
             case (msf, malgo) of
                 (Just _, Just _) -> failWith $ "ambiguous reference" <> showT s
-                (Just sf, Nothing) -> pure $ Var $ Sf sf Nothing
+                (Just sf, Nothing) -> do
+                    id <- genId 
+                    pure $ Var $ Sf sf (Just id)
                 (Nothing, Just algo) -> integrateAlgo s algo
-                (Nothing, Nothing) -> Var <$> toEnvRef s
-    go (Vec v) = Var <$> toEnvRef v
+                (Nothing, Nothing) -> mkEnvExpr s
+    go (Vec v) = mkEnvExpr v
     go (Form []) = failWith "Empty form"
-    go (Form (Sym l:rest)) | isLetSym l = do
-        when (l == letStarSym) $ 
-            recordWarning "let should not be expanded to `let*`. \
-                          \When macroexpanding use `ohua.util/macroexpand-all` instead."
-        case rest of
-            Vec v:statements -> handleLet (handleStatements statements) (partition 2 $ vectorToList v)
-            _ -> failWith "Expected binding vector"
-    -- NOTE: This assumes a form of `(algo [] ...)` (or `(fn [] ...)`) it currently does not handle 
-    -- things like `(fn ([] ...))` perhaps we should ...
-    go (Form (Sym fn:rest)) | isAlgoSym fn = do
-        when (fn == fnSym || fn == fnStarSym) $
-            recordWarning "DEPRECATED: The use of `fn` is deprecated, use `algo` instead."
-        case rest of
-            Vec v:statements -> do
-                assigns <- mapM handleAssign (vectorToList v)
-                ($) <$> mkLams assigns <*> registerBnds (assigns >>= flattenAssign) (handleStatements statements)
-            _ -> failWith "Exprected binding vector"
+    go (Form (Sym sym:rest)) 
+        | isLetSym sym = do
+            when (sym == letStarSym) $ 
+                recordWarning "let should not be expanded to `let*`. \
+                            \When macroexpanding use `ohua.util/macroexpand-all` instead."
+            case rest of
+                Vec v:statements -> handleLet (handleStatements statements) (partition 2 $ vectorToList v)
+                _ -> failWith "Expected binding vector"
+        -- NOTE: This assumes a form of `(algo [] ...)` (or `(fn [] ...)`) it currently does not handle 
+        -- things like `(fn ([] ...))` perhaps we should ...
+        | isAlgoSym sym = do
+            when (sym == fnSym || sym == fnStarSym) $
+                recordWarning "DEPRECATED: The use of `fn` is deprecated, use `algo` instead."
+            case rest of
+                Vec v:statements -> do
+                    assigns <- mapM handleAssign (vectorToList v)
+                    ($) <$> mkLams assigns <*> registerBnds (assigns >>= flattenAssign) (handleStatements statements)
+                _ -> failWith "Exprected binding vector"
+        | isIfSym sym = do
+            (cond, then_, else_) <- 
+                case rest of
+                    -- for support of no-else-statement
+                    -- [condition, then_] -> pure (condition, then_, Nothing)
+                    [condition, then_, else_] -> pure (condition, then_, Just else_)
+                    _ -> failWith $ "Wrong number of arguments for `if`. Expected 3, got " <> showT (length rest)
+            c <- go cond
+            t <- go then_
+            e <- maybe (pure $ error "IMPOSSIBLE") go else_
+            id <- genId
+            pure $ Var (Sf ifFunc (Just id)) `Apply` c `Apply` Lambda "_" t `Apply` Lambda "_" e
     go (Form list) = do
         (fn:rest) <- mapM go list
-        return $ foldl' (\e v -> e `Apply` v) fn rest
+        return $ foldl' (\e v -> e `Apply` v) fn (if null rest then [unitExpr] else rest)
 
     mkLams []   = Lambda . Direct <$> generateBindingWith "_"
     mkLams more = return $ foldl (.) id $ map Lambda more
+
+    genId = do
+        _4 += 1
+        FnId <$> use _4
+
+    -- getNullExpr = Var . Env <$> getNullRef
+
+    -- getNullRef = use _3 >>= \case
+    --     Nothing -> do
+    --         he <- mkEnvRef $ (superCast :: JString -> Object) $ (maybeToJava :: Maybe String -> JString) Nothing
+    --         _3 .= Just he
+    --         pure he
+    --     Just he -> pure he
 
     handleLet f = go'
       where
@@ -159,10 +210,13 @@ toALang reg st = (\(a, (s, _), ()) -> (a, s)) <$> runRWST (go st) (noDeclaredSym
     handleStatements [x] = go x
     handleStatements (stmt:rest) = Let <$> (Direct <$> generateBindingWith "_") <*> go stmt <*> handleStatements rest
 
-    toEnvRef thing = do
+    mkEnvExpr :: (ToEnvExpr e, MonadOhua Object m, MonadState s m, Field1' s (Seq (Either (Unevaluated Object) Object))) => e -> m Expression
+    mkEnvExpr = fmap (Var . Env) . mkEnvRef
+
+    mkEnvRef thing = do
         i <- S.length <$> use _1
         _1 %= (|> Left (Unevaluated $ toEnvExpr thing))
-        pure $ Env $ HostExpr i
+        pure $ HostExpr i
 
     registerBnds bnds = local (_1 %~ DeclaredSymbols . HS.union (HS.fromList bnds) . unwrapDeclaredSymbols)
     registerAssign assign = registerBnds $ flattenAssign assign

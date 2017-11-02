@@ -2,7 +2,7 @@
   (:require [clojure.set :as set]
             [clojure.string :as str]
             [ohua.link]
-            [ohua.util :refer [macroexpand-all]])
+            [ohua.util :refer [macroexpand-all report-option-type +option]])
   (:import java.util.concurrent.atomic.AtomicReference))
 
 
@@ -19,10 +19,6 @@
         a-name (gensym "algo")]
     (intern *ns* a-name a)
     a))
-
-
-(defn report-option-type [option]
-  (throw (Exception. (str "Unexpected type of option. Exprected set, map or keyword, got " (type option)))))
 
 
 (defmacro defalgo 
@@ -81,8 +77,4 @@
   ([code] (ohua-fn code #{:capture}))
   ([code options] 
     (ohua-fn code
-      (cond 
-        (set? options) (conj options :capture)
-        (map? options) (assoc options :capture true)
-        (keyword? options) #{options :capture}
-        :else (report-option-type options)))))
+      (+option options :capture))))

@@ -33,7 +33,7 @@ main = do
     Right (c, _) <- flip runOhuaT0 bnds $ do
         (alang, envs) <- toALang reg converted
         liftIO $ putStrLn $ show alang
-        p <- pipeline alang
+        p <- pipeline (noCustomPasses :: CustomPasses (OhuaT Object IO)) alang
         liftIO $ putStrLn $ show p
         return p
     let native = toNative c

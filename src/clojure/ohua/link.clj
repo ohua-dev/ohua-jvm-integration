@@ -97,7 +97,7 @@
                     qual-sym (symbol ns-ref name-)]
                 (ohua-alias qual-sym name-)
                 qual-sym)
-            (throw (Exception. (str "Ambiguous ocurrence of name \"" name- "\" it is defined in these namespaces: " refer-all-candidates)))))))))
+            (throw (Exception. (str "Ambiguous ocurrence of name \"" name- "\" it is defined in these namespaces: " (into [] refer-all-candidates))))))))))
 
 (defn resolve [name-str]
   (let [sym (symbol name-str)]

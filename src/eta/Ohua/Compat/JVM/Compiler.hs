@@ -18,6 +18,8 @@ import Control.DeepSeq
 import Ohua.Util
 import Ohua.Compat.JVM.ClojureST
 import Ohua.DFGraph.Show
+import Ohua.DFLang.Lang
+import Data.Default
 
 
 
@@ -32,7 +34,14 @@ foreign import java unsafe "@interface eval" linkerEval :: Object -> Java IsLink
 forceA :: (NFData a, Applicative m) => a -> m ()
 forceA = (`deepseq` pure ())
 
-basicCompile :: IsLinker -> Object -> IO (OutGraph, Seq Object)
+cleanUnits :: Applicative m => DFExpr -> m DFExpr
+cleanUnits (DFExpr lets ret) = pure $ DFExpr (fmap f lets) ret
+  where
+    f e@(LetExpr{callArguments=[a]}) | a == dfVarUnit = e {callArguments = []}
+    f e = e
+
+
+basicCompile :: IsLinker -> Object -> IO (OutGraph, Seq (Either (Unevaluated Object) Object))
 basicCompile linker thing = do
     putStrLn "Compiler is running"
     let st = fromNative thing
@@ -42,12 +51,12 @@ basicCompile linker thing = do
         forceAndReport "alang converted" alang
         liftIO $ print alang
         -- liftIO $ writeFile "alang-dump" $ show alang
-        graph <- pipeline alang
+        graph <- pipeline (noCustomPasses :: CustomPasses (OhuaT Object IO)) {passAfterDFLowering = cleanUnits} alang
         forceAndReport "graph created" graph
         pure (graph, envExprs)
     forceAndReport "Compilation done" graph
     printAsTable $ graph
-    (graph,) <$> evalExprs linker envExprs
+    pure (graph, envExprs)
 
 
 evalExprs :: IsLinker -> Seq (Either (Unevaluated Object) Object) -> IO (Seq Object)
@@ -72,7 +81,8 @@ nativeCompile linker thing = toNative . fst <$> basicCompile linker thing
 
 nativeCompileWSplice :: IsLinker -> Object -> IO (NGraph Object)
 nativeCompileWSplice linker thing = do
-    (graph, envExprs) <- basicCompile linker thing
+    (graph, envExprs0) <- basicCompile linker thing
+    envExprs <- evalExprs linker envExprs0
     return $ toNative $ spliceEnv graph (Seq.index envExprs)
 
 
@@ -81,6 +91,12 @@ nativeCompileAlgo linker thing = do
     (alang, envExprs) <- fmap (either (error . T.unpack) id) . (`runOhuaT0IO` definedBindings st) $ toALang (mkRegistry linker) st
     toNative . Algo alang <$> evalExprs linker envExprs
   where st = fromNative thing
+
+
+nativeCompileWithoutEnvEval :: IsLinker -> Object -> IO (NGraph Object)
+nativeCompileWithoutEnvEval linker thing = do
+    (graph, envExprs) <- basicCompile linker thing
+    return $ toNative $ spliceEnv graph (Seq.index $ fmap (either unwrapUnevaluated id) envExprs)
 
 
 -- nativeToAlang :: Object -> IO ()
@@ -92,5 +108,6 @@ foreign export java "@static ohua.Compiler.compile" nativeCompile :: IsLinker ->
 foreign export java "@static ohua.Compiler.compileAndSpliceEnv" nativeCompileWSplice :: IsLinker -> Object -> IO (NGraph Object)
 
 foreign export java "@static ohua.Compiler.compileAlgo" nativeCompileAlgo :: IsLinker -> Object -> IO NAlgo
+foreign export java "@static ohua.Compiler.compileWithoutEnvEval" nativeCompileWithoutEnvEval :: IsLinker -> Object -> IO (NGraph Object)
 
 -- foreign export java "@static ohua.Compiler.testToALang" nativeToAlang :: Object -> IO ()
