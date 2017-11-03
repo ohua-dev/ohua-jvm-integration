@@ -72,7 +72,7 @@
 (deftest input-ports-let
   "test for input port detection via let"
   []
-  (expect-op-arc-count 
+  (expect-op-arc-count
     (let [out-1 (accept "port01")
           out-2 (accept "port02")]
       (read out-1 out-2))
@@ -111,19 +111,19 @@
     3
     6))
 
-(deftest arguments-outside
-  "testing the detection of arguments"
-  []
-  (let [an-arg [1 2 3]
-        type an-arg
-        _ (clojure.pprint/pprint "debug: ")]
-    (expect-op-arc-count 
-      (let [out-1 (accept "port01")
-            out-2 (accept 9080)]
-        (read out-1 out-2 an-arg))
-      ; 3 ops + 2 arcs + 3 env arcs
-      3
-      5)))
+; TODO See issue #11
+; (deftest arguments-outside
+;   "testing the detection of arguments"
+;   []
+;   (let [an-arg [1 2 3]
+;         type an-arg]
+;     (expect-op-arc-count
+;       (let [out-1 (accept "port01")
+;             out-2 (accept 9080)]
+;         (read out-1 out-2 an-arg))
+;       ; 3 ops + 2 arcs + 3 env arcs
+;       3
+;       5)))
 
 ; disabled, functions are currently not allowed as arguments. we may chose to trigger on `algo` instead which allows this again
 ; (deftest arguments-function
@@ -142,7 +142,7 @@
 (deftest multiple-arcs-from-one-source
   "testing multiple arcs depending on the same source operator"
   []
-  (expect-op-arc-count 
+  (expect-op-arc-count
     (let [out-1 (accept "port01")
           out-2 (read out-1)]
       (load out-1))

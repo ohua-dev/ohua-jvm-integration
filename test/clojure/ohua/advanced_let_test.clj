@@ -15,17 +15,17 @@
   "Tests the proper dataflow tracking in the let statement -> last statement provides result."
   []
 ;  (l/enable-compilation-logging )
-  (let [ohua-code  (compat-compile 
-                     (let [request (accept "8080")] 
+  (let [ohua-code  (compat-compile
+                     (let [request (accept "8080")]
                        (send (let [[one two] (read request)]
                                (parse one)
-                               (parse two)))) :test-compile)]
+                               (parse two)))) :strip-ns)]
 ;    (l/enable-logging )
 ;    (l/write ohua-code :dispatch clojure.pprint/code-dispatch)
-    (test/is 
+    (test/is
       (ohua-test/compare-code
-        ohua-code 
-        '((new com.ohua.lang.compile.FlowGraphCompiler)
+        ohua-code
+        '((new ohua.lang.compile.FlowGraphCompiler)
            (.createOperator "accept" 100)
            (.createOperator "send" 101)
            (.createOperator "read" 102)
@@ -37,8 +37,8 @@
            (.registerDependency 102 1 104 0)
            (.setArguments
 				         100
-				         (clojure.core/into-array com.ohua.lang.Tuple
-                                          (list (com.ohua.lang.Tuple. (clojure.core/int 0) 'java.lang.String))))
+				         (clojure.core/into-array ohua.lang.Tuple
+                                          (clojure.core/list (ohua.lang.Tuple. (clojure.core/int 0) 'java.lang.String))))
            (.compile true)))))
   )
 
@@ -59,17 +59,17 @@
   "Tests the propagation of the let information."
   []
 ;  (l/enable-compilation-logging )
-  (let [ohua-code  (compat-compile 
-                     (let [request (accept "8080")] 
+  (let [ohua-code  (compat-compile
+                     (let [request (accept "8080")]
                        (send
                          (let [one (read request)]
                            (let [two (parse one)]
-                             (parse two))))) :test-compile)]
+                             (parse two))))) :strip-ns)]
 ;    (l/enable-logging )
-    (test/is 
+    (test/is
       (ohua-test/compare-code
-        ohua-code 
-        '((new com.ohua.lang.compile.FlowGraphCompiler)
+        ohua-code
+        '((new ohua.lang.compile.FlowGraphCompiler)
            (.createOperator "accept" 100)
            (.createOperator "send" 101)
            (.createOperator "read" 102)
@@ -81,7 +81,7 @@
            (.registerDependency 103 -1 104 0)
            (.setArguments
 				         100
-				         (clojure.core/into-array com.ohua.lang.Tuple
-                                          (list (com.ohua.lang.Tuple. (clojure.core/int 0) 'java.lang.String))))
+				         (clojure.core/into-array ohua.lang.Tuple
+                                          (clojure.core/list (ohua.lang.Tuple. (clojure.core/int 0) 'java.lang.String))))
            (.compile true)))))
   )
