@@ -13,7 +13,7 @@
 (defn is-env-arc? [arc]
   (instance? Source$Env (.source arc)))
 
-(defn- adjust-op-id [id] 
+(defn- adjust-op-id [id]
   (+ 99 id))
 
 (defn ptrace [a]
@@ -21,26 +21,27 @@
   a)
 
 (defmacro compat-compile
-  "NOTICE: This is only for compatibility with old tests. 
-   This does not correctly evaluate env arguments 
-   (they are not evaluated in their scope). 
+  "NOTICE: This is only for compatibility with old tests.
+   This does not correctly evaluate env arguments
+   (they are not evaluated in their scope).
    Do not use this to create production code. "
-  ([code] `(ohua ~code {}))
-  ([code option0] 
+  ([code] `(compat-compile   ~code {}))
+  ([code option0]
     (let [option (+option option0 :test-compile)
           ; TODO do not eval env arcs
           gr (ohua.Compiler/compileAndSpliceEnv
                   ohua.link/clj-linker
                   (ptrace (macroexpand-all code)))
+          rename-op-types (if (:strip-ns option) #(name (symbol %)) identity)
           ops (map
-                (fn [op] `(.createOperator ~(name (symbol (.type op))) ~(adjust-op-id (.id op))))
+                (fn [op] `(.createOperator ~(rename-op-types(.type op)) ~(adjust-op-id (.id op))))
                 (sort-by #(.id %) (.operators gr)))
           arcs (map
-                (fn [arc] 
+                (fn [arc]
                   (let [src (.target (.source arc))]
-                    `(.registerDependency 
+                    `(.registerDependency
                         ~(adjust-op-id (.operator src))
-                        ~(.index src) 
+                        ~(.index src)
                         ~(adjust-op-id (.operator (.target arc)))
                         ~(.index (.target arc)))))
                 (sort-by #(.operator (.target %)) (filter is-local-arc? (.arcs gr))))
@@ -52,18 +53,24 @@
                       (let [args (op-sorted-env-arcs target-op)]
                         (assert (not (nil? args)))
                         `(.setArguments ~(adjust-op-id target-op)
-                            (into-array 
-                              com.ohua.lang.Tuple
-                                ~(cons 'list
-                                  (map 
-                                    (fn [arc]
-                                      `(com.ohua.lang.Tuple. (int ~(.index (.target arc))) (quote ~(type (.hostExpr (.source arc))))))
-                                    args))))))
+                            (into-array
+                              ohua.lang.Tuple
+                                (list
+                                  ~@(map
+                                      (fn [arc]
+                                        `(ohua.lang.Tuple. (int ~(.index (.target arc))) (quote ~(type (.hostExpr (.source arc))))))
+                                      args))))))
                     env-target-seq)
           ]
       `'(
-        (new com.ohua.lang.compile.FlowGraphCompiler)
+        (new ohua.lang.compile.FlowGraphCompiler)
         ~@ops
         ~@arcs
         ~@env-arcs
         (.compile true)))))
+
+
+(defmacro expect-op-arc-count [code ops arcs]
+  `(let [gr# (ohua.lang/ohua ~code :test-compile)]
+    (test/is (= ~ops (count (.operators gr#))))
+    (test/is (= ~arcs (count (.arcs gr#))))))

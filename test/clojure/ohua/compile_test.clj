@@ -7,14 +7,10 @@
   (:require [clojure.test :refer :all :as test]
             [ohua.lang :refer :all]
             [ohua.logging :as l]
-            [ohua.link]))
+            [ohua.link]
+            [ohua.testutils :refer [expect-op-arc-count]]))
 
 (ohua-require [ohua.tests :refer :all])
-
-(defmacro expect-op-arc-count [code ops arcs]
-  `(let [gr# (ohua ~code :test-compile)]
-    (test/is (= ~ops (count (.operators gr#))))
-    (test/is (= ~arcs (count (.arcs gr#))))))
 
 (deftest webserver-with-let
   "testing simple let-based implementation of the web server algorithm"
