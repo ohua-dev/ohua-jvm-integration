@@ -52,10 +52,12 @@ isLetSym a
 fnSym = Symbol Nothing "fn"
 fnStarSym = Symbol Nothing "fn*"
 algoSym = Symbol Nothing "algo"
+qualAlgoSym = Symbol (Just "ohua.lang") "algo"
 isAlgoSym s
     =  s == algoSym
     || s == fnSym
     || s == fnStarSym
+    || s == qualAlgoSym
 
 ifSym = Symbol Nothing "if"
 
@@ -116,8 +118,40 @@ isAlgo b' = (($ b) . registryResolveAlgo) <$> view _2
   where b = toBinding b'
 
 
+assignIds :: MonadOhua env m => Expression -> m Expression
+assignIds e = do
+    e' <- lrPostwalkExprM go e
+    -- reset the id counter to the highest id currently assigned so as to avoid clashes 
+    -- futher in the compiler
+    onState $ \s -> 
+        ( ()
+        , idCounter .~ 
+                max (s ^. idCounter) 
+                (if HS.null ids then 0 else unFnId (maximum ids)) 
+            $ s
+        )
+    pure e'
+  where
+    ids = foldr' f mempty e
+    f (Sf _ (Just id)) = HS.insert id
+    f _ = id
+
+    genNewId = do
+        id <- generateId
+        if id `HS.member` ids then
+            generateId
+        else
+            pure id
+    go (Var (Sf name Nothing)) = Var . Sf name . Just <$> genNewId
+    go e = pure e
+
+
+-- Discuss algos with no inputs with sebastian!
 toALang :: MonadOhua Object m => Registry -> ST -> m (Expression, Seq (Either (Unevaluated Object) Object))
-toALang reg st = (\(a, (s, _, _, _), ()) -> (a, s)) <$> runRWST (go st) (noDeclaredSymbols, reg) (mempty, mempty, Nothing, 0 :: Int)
+toALang reg st = do 
+    (a, s, ()) <- runRWST (go st) (noDeclaredSymbols, reg) (mempty, mempty, Nothing)
+    a' <- assignIds a
+    pure (a', s ^. _1)
   where
     go (Literal o) = mkEnvExpr o
     go (Sym s) = do
@@ -130,9 +164,7 @@ toALang reg st = (\(a, (s, _, _, _), ()) -> (a, s)) <$> runRWST (go st) (noDecla
             malgo <- isAlgo s
             case (msf, malgo) of
                 (Just _, Just _) -> failWith $ "ambiguous reference" <> showT s
-                (Just sf, Nothing) -> do
-                    id <- genId 
-                    pure $ Var $ Sf sf (Just id)
+                (Just sf, Nothing) -> pure $ Var $ Sf sf Nothing
                 (Nothing, Just algo) -> integrateAlgo s algo
                 (Nothing, Nothing) -> mkEnvExpr s
     go (Vec v) = mkEnvExpr v
@@ -165,18 +197,20 @@ toALang reg st = (\(a, (s, _, _, _), ()) -> (a, s)) <$> runRWST (go st) (noDecla
             c <- go cond
             t <- go then_
             e <- maybe (pure $ error "IMPOSSIBLE") go else_
-            id <- genId
-            pure $ Var (Sf ifFunc (Just id)) `Apply` c `Apply` Lambda "_" t `Apply` Lambda "_" e
+            pure $ Var (Sf ifFunc Nothing) `Apply` c `Apply` Lambda "_" t `Apply` Lambda "_" e
     go (Form list) = do
         (fn:rest) <- mapM go list
+
+        -- I insert `unit` here as argument to functions with no arguments. 
+        -- This is remvoed again after lowering to DFLang with `Ohua.Compat.JVM.cleanUnits`.
+        -- Be aware that the `unit` value itself is a hack and will break resolving 
+        -- env args when not properly removed!
+        -- Make sure to pay special attention to the unit value and its application again when 
+        -- coercing env args!
         return $ foldl' (\e v -> e `Apply` v) fn (if null rest then [unitExpr] else rest)
 
     mkLams []   = Lambda . Direct <$> generateBindingWith "_"
     mkLams more = return $ foldl (.) id $ map Lambda more
-
-    genId = do
-        _4 += 1
-        FnId <$> use _4
 
     -- getNullExpr = Var . Env <$> getNullRef
 
