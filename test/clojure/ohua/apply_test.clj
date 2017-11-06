@@ -1,5 +1,5 @@
 (ns ohua.apply-test
-  (:require [ohua.lang :refer [ohua]]
+  (:require [ohua.lang :refer [<-ohua ohua]]
             [clojure.test :refer [deftest is]]
             ;[ohua.logging :as l]
             ))
@@ -12,7 +12,7 @@
   (is
     (=
       120
-      (ohua (apply clojure.core/+ (id 20) 100))))
+      (<-ohua (apply clojure.core/+ (id 20) 100))))
   ; disabled for now, as they use embedded clojure functions which are currently not supported
   ; (is
   ;   (=
