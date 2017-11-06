@@ -1,7 +1,8 @@
 package ohua;
 
+import ohua.util.Lazy;
 
-/** 
+/**
  * Support class for the compiler.
  */
 public interface Linker {
@@ -15,7 +16,7 @@ public interface Linker {
      * Resolve an algo.
      * Returns an `Algo` structure capturing the compiled alang code for the algo
      * as well as an array of objects that represent the constant input values.
-     * 
+     *
      * If no algo was found returns `null`.
      */
     Algo resolveAlgo(String name);
@@ -26,7 +27,7 @@ public interface Linker {
     default String showExpr(Object expr) {
         return expr.toString();
     }
-    default Object eval(Object expr) {
-        return expr;
+    default Lazy<Object> eval(Object expr) {
+        return Lazy.createRealized(expr);
     }
 }

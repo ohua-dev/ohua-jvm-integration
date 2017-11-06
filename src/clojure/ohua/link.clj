@@ -10,7 +10,9 @@
   (:require [clojure.string :as string])
   (:import (clojure.lang Symbol Var)
            (ohua StatefulFunctionProvider Algo)
-           (ohua.loader MultiDispatchSFProvider JavaProviderFromAnnotatedMethod)))
+           (ohua.loader MultiDispatchSFProvider JavaProviderFromAnnotatedMethod)
+           (ohua.util Lazy)
+           (java.util.function Supplier)))
 
 
 (def ^:private ohua-linker-ref :__ohua-linker)
@@ -19,8 +21,8 @@
 
 (deftype Linker [alias-registry imported-namespaces refers-all])
 (defn- mk-linker [] (->Linker (atom {}) (atom #{}) (atom #{})))
-(defn- init-linker [] 
-  (let [l (mk-linker)] 
+(defn- init-linker []
+  (let [l (mk-linker)]
     (alter-meta! *ns* assoc ohua-linker-ref l)
     (ohua-require-fn '[ohua.lang :refer :all])
     l))
@@ -59,7 +61,7 @@
   (if (is-aliased? alias-ref) (println "Already has registered ref for " (str alias-ref)))
   (register-alias-bare alias-ref qual-ref))
 
-(def backend 
+(def backend
   ; (MultiDispatchSFProvider/combine (into-array StatefulFunctionProvider [
     (JavaProviderFromAnnotatedMethod.)
     ; (reify StatefulFunctionProvider
@@ -74,10 +76,10 @@
 (require '[clojure.pprint :as pprint])
 
 (defn print-loaded-methods [ns-ref]
-  (pprint/print-table 
+  (pprint/print-table
     (for [m (.getMethods backend ns-ref)]
-      {:return-type (.getGenericReturnType m) 
-       :name (.getName m) 
+      {:return-type (.getGenericReturnType m)
+       :name (.getName m)
        :parameters (into [] (.getGenericParameterTypes m))
        :class (.getDeclaringClass m)})))
 
@@ -109,7 +111,7 @@
             (.exists backend (namespace unaliased) (name unaliased)))
         (str unaliased)))))
 
-(defn ohua-require-fn 
+(defn ohua-require-fn
 
   [& args]
   (doseq [spec args]
@@ -139,14 +141,32 @@
 
 (defmacro ohua-require [& args] (apply ohua-require-fn args))
 
-
-(def clj-linker
-  (reify ohua.Linker
-    (resolve [_ n]
-      (resolve n))
-    (resolveAlgo [_ s]
-      (if-let [a (clojure.core/resolve (symbol s))]
-        (let [a- (var-get a)]
-          (if (= (type a-) Algo)
-            a-))))
-    (eval [_ thing] (eval thing))))
+(defn clj-linker []
+  (let [scope (atom {})
+        linker
+        (reify ohua.Linker
+          (resolve [_ sf-ref]
+            (resolve sf-ref))
+          (resolveAlgo [_ s]
+            (if-let [a (clojure.core/resolve (symbol s))]
+              (let [a- (var-get a)]
+                (if (= (type a-) Algo)
+                  a-))))
+          (eval [_ thing]
+            (if (and (symbol? thing) (not (namespace thing)) (contains? @clojure.lang.Compiler/LOCAL_ENV thing))
+              (do
+                (swap! scope assoc thing :uninitialized)
+                (Lazy/createLazy
+                  (reify Supplier
+                    (get [_]
+                      (get @scope thing)))))
+              (Lazy/createRealized (eval thing)))))
+      scope-sym (gensym "scope")]
+    (intern *ns* scope-sym scope)
+    [linker
+    (fn []
+      `(reset! ~scope-sym
+        ~(reduce-kv (fn [m k _]
+          (assoc m `'~k k)
+          ) {} @scope)))
+    ]))

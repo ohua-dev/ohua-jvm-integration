@@ -30,7 +30,7 @@
     (let [option (+option option0 :test-compile)
           ; TODO do not eval env arcs
           gr (ohua.Compiler/compileAndSpliceEnv
-                  ohua.link/clj-linker
+                  (first (ohua.link/clj-linker))
                   (ptrace (macroexpand-all code)))
           rename-op-types (if (:strip-ns option) #(name (symbol %)) identity)
           ops (map
