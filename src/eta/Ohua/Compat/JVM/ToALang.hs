@@ -46,8 +46,8 @@ isLetSym, isAlgoSym :: ClST.Symbol -> Bool
 
 letSym = Symbol Nothing "let"
 letStarSym = Symbol Nothing "let*"
-isLetSym a 
-    =  a == letSym 
+isLetSym a
+    =  a == letSym
     || a == letStarSym
 fnSym = Symbol Nothing "fn"
 fnStarSym = Symbol Nothing "fn*"
@@ -84,7 +84,7 @@ ifFunc :: QualifiedBinding
 ifFunc = "ohua.lang/if"
 
 data Registry = Registry
-    { registryResolveSf :: Binding -> Maybe QualifiedBinding 
+    { registryResolveSf :: Binding -> Maybe QualifiedBinding
     , registryResolveAlgo :: Binding -> Maybe Algo
     }
 
@@ -121,13 +121,13 @@ isAlgo b' = (($ b) . registryResolveAlgo) <$> view _2
 assignIds :: MonadOhua env m => Expression -> m Expression
 assignIds e = do
     e' <- lrPostwalkExprM go e
-    -- reset the id counter to the highest id currently assigned so as to avoid clashes 
+    -- reset the id counter to the highest id currently assigned so as to avoid clashes
     -- futher in the compiler
-    onState $ \s -> 
+    onState $ \s ->
         ( ()
-        , idCounter .~ 
-                max (s ^. idCounter) 
-                (if HS.null ids then 0 else unFnId (maximum ids)) 
+        , idCounter .~
+                max (s ^. idCounter)
+                (if HS.null ids then 0 else unFnId (maximum ids))
             $ s
         )
     pure e'
@@ -147,8 +147,8 @@ assignIds e = do
 
 
 -- Discuss algos with no inputs with sebastian!
-toALang :: MonadOhua Object m => Registry -> ST -> m (Expression, Seq (Either (Unevaluated Object) Object))
-toALang reg st = do 
+toALang :: MonadOhua Object m => Registry -> ST -> m (Expression, Seq (Either (Unevaluated Object) (NLazy Object)))
+toALang reg st = do
     (a, s, ()) <- runRWST (go st) (noDeclaredSymbols, reg) (mempty, mempty, Nothing)
     a' <- assignIds a
     pure (a', s ^. _1)
@@ -156,7 +156,7 @@ toALang reg st = do
     go (Literal o) = mkEnvExpr o
     go (Sym s) = do
         isLocal <- isDefined s
-        
+
         if isLocal then
             Var . Local <$> expectUnqual s
         else do
@@ -169,15 +169,15 @@ toALang reg st = do
                 (Nothing, Nothing) -> mkEnvExpr s
     go (Vec v) = mkEnvExpr v
     go (Form []) = failWith "Empty form"
-    go (Form (Sym sym:rest)) 
+    go (Form (Sym sym:rest))
         | isLetSym sym = do
-            when (sym == letStarSym) $ 
+            when (sym == letStarSym) $
                 recordWarning "let should not be expanded to `let*`. \
                             \When macroexpanding use `ohua.util/macroexpand-all` instead."
             case rest of
                 Vec v:statements -> handleLet (handleStatements statements) (partition 2 $ vectorToList v)
                 _ -> failWith "Expected binding vector"
-        -- NOTE: This assumes a form of `(algo [] ...)` (or `(fn [] ...)`) it currently does not handle 
+        -- NOTE: This assumes a form of `(algo [] ...)` (or `(fn [] ...)`) it currently does not handle
         -- things like `(fn ([] ...))` perhaps we should ...
         | isAlgoSym sym = do
             when (sym == fnSym || sym == fnStarSym) $
@@ -188,7 +188,7 @@ toALang reg st = do
                     ($) <$> mkLams assigns <*> registerBnds (assigns >>= flattenAssign) (handleStatements statements)
                 _ -> failWith "Exprected binding vector"
         | isIfSym sym = do
-            (cond, then_, else_) <- 
+            (cond, then_, else_) <-
                 case rest of
                     -- for support of no-else-statement
                     -- [condition, then_] -> pure (condition, then_, Nothing)
@@ -201,11 +201,11 @@ toALang reg st = do
     go (Form list) = do
         (fn:rest) <- mapM go list
 
-        -- I insert `unit` here as argument to functions with no arguments. 
+        -- I insert `unit` here as argument to functions with no arguments.
         -- This is remvoed again after lowering to DFLang with `Ohua.Compat.JVM.cleanUnits`.
-        -- Be aware that the `unit` value itself is a hack and will break resolving 
+        -- Be aware that the `unit` value itself is a hack and will break resolving
         -- env args when not properly removed!
-        -- Make sure to pay special attention to the unit value and its application again when 
+        -- Make sure to pay special attention to the unit value and its application again when
         -- coercing env args!
         return $ foldl' (\e v -> e `Apply` v) fn (if null rest then [unitExpr] else rest)
 
@@ -244,7 +244,7 @@ toALang reg st = do
     handleStatements [x] = go x
     handleStatements (stmt:rest) = Let <$> (Direct <$> generateBindingWith "_") <*> go stmt <*> handleStatements rest
 
-    mkEnvExpr :: (ToEnvExpr e, MonadOhua Object m, MonadState s m, Field1' s (Seq (Either (Unevaluated Object) Object))) => e -> m Expression
+    mkEnvExpr :: (ToEnvExpr e, MonadOhua Object m, MonadState s m, Field1' s (Seq (Either (Unevaluated Object) (NLazy Object)))) => e -> m Expression
     mkEnvExpr = fmap (Var . Env) . mkEnvRef
 
     mkEnvRef thing = do
@@ -256,13 +256,13 @@ toALang reg st = do
     registerAssign assign = registerBnds $ flattenAssign assign
 
 
-integrateAlgo :: (MonadState s m, Field1' s (Seq (Either (Unevaluated Object) Object)), Field2' s (HM.HashMap ClST.Symbol Expression)) => ClST.Symbol -> Algo -> m Expression
+integrateAlgo :: (MonadState s m, Field1' s (Seq (Either (Unevaluated Object) (NLazy Object))), Field2' s (HM.HashMap ClST.Symbol Expression)) => ClST.Symbol -> Algo -> m Expression
 integrateAlgo aname (Algo code envExprs) = do
     cached <- gets (^? _2 . ix aname)
     case cached of
         Just a -> pure a
         Nothing -> do
-            i <- S.length <$> use _1 
+            i <- S.length <$> use _1
             _1 %= (<> fmap Right envExprs)
             let adjusted = shiftEnvExprs i code
             _2 . at aname .= Just adjusted
@@ -270,7 +270,7 @@ integrateAlgo aname (Algo code envExprs) = do
 
 
 shiftEnvExprs :: Int -> Expression -> Expression
-shiftEnvExprs offset = lrMapRefs $ \case 
+shiftEnvExprs offset = lrMapRefs $ \case
     Env (HostExpr i) -> Env $ HostExpr $ i + offset
     a -> a
 

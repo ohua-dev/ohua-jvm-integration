@@ -50,6 +50,3 @@ class ToEnvExpr a where
 
 instance ToEnvExpr Object where
     toEnvExpr = id
-
-
-data Algo = Algo !Expression !(S.Seq Object)

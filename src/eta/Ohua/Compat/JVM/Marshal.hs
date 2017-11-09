@@ -57,7 +57,7 @@ instance NativeConverter QualifiedBinding where
     type NativeType QualifiedBinding = JString
     toNative (QualifiedBinding ns name) = toNative $ T.intercalate "." (map unBinding $ nsRefToList ns) <> "/" <> (unBinding name)
     fromNative = either error expectQual . symbolFromString . fromNative
-      where 
+      where
         expectQual (Qual q) = q
         expectQual s = error $ "Expected qualified binding, got " ++ show s
 
@@ -133,7 +133,7 @@ instance NativeConverter Assignment where
             _ -> error $ "unconvertable " ++ fromJava (toString assign)
     toNative (Direct bnd) = superCast $ newDirectAssignment $ toNative bnd
     toNative (Destructure bnds) = superCast $ newDestructureAssignment $ toJava $ map toNative bnds
-            
+
 
 data {-# CLASS "ohua.types.Binding" #-} NBinding = NBinding (Object# NBinding) deriving (Class)
 
@@ -161,7 +161,7 @@ instance NativeConverter ResolvedSymbol where
             (_, _, Just v) -> Env $ fromNative $ nEnvBindingId v
             _ -> error "unconvertable"
     toNative (Local l) = superCast $ newLocalBinding $ toNative l
-    toNative (Sf name num) = superCast $ maybe newSFBinding1 (flip newSFBinding) (fmap (toJava . unFnId) num) (toNative name) 
+    toNative (Sf name num) = superCast $ maybe newSFBinding1 (flip newSFBinding) (fmap (toJava . unFnId) num) (toNative name)
     toNative (Env n) = superCast $ newEnvBinding $ toJava $ unwrapHostExpr n
 
 data {-# CLASS "ohua.alang.ResolvedSymbol$Local" #-} NLocalBinding = NLocalBinding (Object# NLocalBinding) deriving Class
@@ -238,7 +238,7 @@ instance NativeConverter a => NativeConverter (Source a) where
 
 
 data {-# CLASS "ohua.graph.Source$Local" #-} NLocalSource a = NLocalSource (Object# (NLocalSource a)) deriving Class
-    
+
 type instance Inherits (NLocalSource a) = '[NSource a]
 foreign import java "@new" newNLocalSource :: NTarget -> NLocalSource a
 -- foreign import java  "@field target" nLocalSourceTarget :: NLocalSource a -> NTarget
@@ -277,11 +277,24 @@ instance NativeConverter Object where
     fromNative = id
     toNative = id
 
+instance NativeConverter (NLazy a) where
+    type NativeType (NLazy a) = NLazy a
+    fromNative = id
+    toNative = id
+
+data {-# CLASS "ohua.util.Lazy" #-} NLazy a = NLazy (Object# (NLazy a)) deriving Class
+
+data {-# CLASS "ohua.util.Lazy[]" #-} NLazyArray a = NLazyArray (Object# (NLazyArray a)) deriving Class
+
+instance JArray (NLazy a) (NLazyArray a)
+
+data Algo = Algo !Expression !(S.Seq (NLazy Object))
+
 data {-# CLASS "ohua.Algo" #-} NAlgo = NAlgo (Object# NAlgo) deriving Class
 
-foreign import java "@new" newNAlgo :: NExpr -> JObjectArray -> NAlgo
+foreign import java "@new" newNAlgo :: NExpr -> NLazyArray Object -> NAlgo
 foreign import java "@field code" nAlgoCode :: NAlgo -> NExpr
-foreign import java "@field envExprs" nAlgoEnvExprs :: NAlgo -> JObjectArray
+foreign import java "@field envExprs" nAlgoEnvExprs :: NAlgo -> NLazyArray Object
 
 instance NativeConverter Algo where
     type NativeType Algo = NAlgo
@@ -340,4 +353,3 @@ instance ToEnvExpr ClST.Symbol where
 
 instance ToEnvExpr Vector where
     toEnvExpr = cljVector . (superCast :: JObjectArray -> Object) . toJava . map toNative . vectorToList
-

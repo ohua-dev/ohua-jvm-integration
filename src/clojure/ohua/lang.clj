@@ -39,7 +39,8 @@
     (do
       (println "Using the :import version of the ohua macro is deprecated")
       (apply ohua.link/ohua-require-fn (map (fn [ns_] [ns_ :refer :all]) option_)))
-    (let [option (cond
+    (let [_ (ohua.link/get-linker)
+          option (cond
                    (or (set? option_) (map? option_)) option_
                    (keyword? option_) #{option_}
                    :else (report-option-type option_))

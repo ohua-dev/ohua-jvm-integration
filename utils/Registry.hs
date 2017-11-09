@@ -3,6 +3,7 @@ module Registry where
 import qualified Data.HashSet as HS
 import qualified Data.HashMap.Strict as HM
 import Ohua.Compat.JVM.ToALang
+import Ohua.Compat.JVM.Marshal
 import Ohua.Types
 import Ohua.Compat.JVM.ClojureST
 

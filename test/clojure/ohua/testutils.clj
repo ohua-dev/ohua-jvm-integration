@@ -20,6 +20,12 @@
   (clojure.pprint/pprint a)
   a)
 
+(defn get-type-or-throw [source]
+  (let [lazy (.hostExpr source)]
+    (if (.isRealized lazy)
+      (type (.get lazy))
+      (throw (Exception. "Cannot evaluate local arguments in compat-compile")))))
+
 (defmacro compat-compile
   "NOTICE: This is only for compatibility with old tests.
    This does not correctly evaluate env arguments
@@ -48,19 +54,20 @@
           env-arcs (filter is-env-arc? (.arcs gr))
           env-target-seq (distinct (map #(.operator (.target %)) env-arcs))
           op-sorted-env-arcs (group-by #(.operator (.target %)) env-arcs)
-          env-arcs (map
-                    (fn [target-op]
-                      (let [args (op-sorted-env-arcs target-op)]
-                        (assert (not (nil? args)))
-                        `(.setArguments ~(adjust-op-id target-op)
-                            (into-array
-                              ohua.lang.Tuple
-                                (list
-                                  ~@(map
-                                      (fn [arc]
-                                        `(ohua.lang.Tuple. (int ~(.index (.target arc))) (quote ~(type (.hostExpr (.source arc))))))
-                                      args))))))
-                    env-target-seq)
+          env-arcs
+          (map
+            (fn [target-op]
+              (let [args (op-sorted-env-arcs target-op)]
+                (assert (not (nil? args)))
+                `(.setArguments ~(adjust-op-id target-op)
+                    (into-array
+                      ohua.lang.Tuple
+                        (list
+                          ~@(map
+                              (fn [arc]
+                                `(ohua.lang.Tuple. (int ~(.index (.target arc))) (quote ~(get-type-or-throw (.source arc)))))
+                              args))))))
+            env-target-seq)
           ]
       `'(
         (new ohua.lang.compile.FlowGraphCompiler)

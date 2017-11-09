@@ -5,7 +5,7 @@
             ))
 
 
-(ohua :import [ohua.lang.tests])
+(ohua :import [ohua.tests])
 
 
 (deftest simple-apply-test
@@ -13,13 +13,13 @@
     (=
       120
       (<-ohua (apply clojure.core/+ (id 20) 100))))
-  ; disabled for now, as they use embedded clojure functions which are currently not supported
+  ; disabled for now, as they use embedded sf references functions which are currently not supported
   ; (is
   ;   (=
   ;     120
-  ;     (ohua (id (apply ohua.lang.tests/add (int 20) (int 100))))))
+  ;     (ohua (id (apply ohua.tests/add (int 20) (int 100))))))
   ; (is
   ;   (=
   ;     120
-  ;     (ohua (apply ohua.lang.tests/add (id (int 20)) (int 100)))))
+  ;     (ohua (apply ohua.tests/add (id (int 20)) (int 100)))))
       )

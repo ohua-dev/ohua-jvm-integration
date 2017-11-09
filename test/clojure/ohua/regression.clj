@@ -12,7 +12,7 @@
                      ohua.linker-test
                      ohua.linker-test-2
                      ohua.local-variable-override-test
-                    ;  ohua.null-values-test
+                     ohua.null-values-test
                      ohua.simple-run-test]]
   (apply require namespaces)
   (apply test/run-tests namespaces)))

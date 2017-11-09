@@ -134,6 +134,8 @@
                                     :all (swap! (.refers_all (get-linker)) conj (->ns-string ns-ref))
                                     (doseq [sym data]
                                       (assert (symbol? sym))
+                                      (assert (not (namespace sym)))
+                                      (assert (.exists backend (name ns-ref) (name sym)) (str "No stateful function " sym " found in namespace " ns-ref))
                                       (ohua-alias (symbol ns-str (name sym)) (name sym)))))
                          (throw (new IllegalArgumentException (str "Unrecognized flag " flag))))))
       :else (throw (new IllegalArgumentException (str "Spec must be symbol or sequence, not " (type spec))))))
