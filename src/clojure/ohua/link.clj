@@ -151,9 +151,10 @@
             (resolve sf-ref))
           (resolveAlgo [_ s]
             (if-let [a (clojure.core/resolve (symbol s))]
-              (let [a- (var-get a)]
-                (if (= (type a-) Algo)
-                  a-))))
+              (if (var? a)
+                (let [a- (var-get a)]
+                  (if (= (type a-) Algo)
+                    a-)))))
           (eval [_ thing]
             (if (and (symbol? thing) (not (namespace thing)) (contains? @clojure.lang.Compiler/LOCAL_ENV thing))
               (do

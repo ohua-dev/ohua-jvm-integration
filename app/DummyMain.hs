@@ -30,10 +30,10 @@ main = do
     hPutStrLn stderr $ show converted
 
     let !bnds = definedBindings converted
-    Right (c, _) <- flip (runOhuaT0 opts) bnds $ do
+    Right c <- flip (runFromBindings opts) bnds $ do
         (alang, envs) <- toALang reg converted
         liftIO $ putStrLn $ show alang
-        p <- pipeline (noCustomPasses :: CustomPasses (OhuaT Object IO)) alang
+        p <- pipeline noCustomPasses alang
         liftIO $ putStrLn $ show p
         return p
     let native = toNative c

@@ -49,21 +49,20 @@ cleanUnits (DFExpr lets ret) = pure $ DFExpr (fmap f lets) ret
 
 basicCompile :: IsLinker -> Object -> IO (OutGraph, Seq (Either (Unevaluated Object) (NLazy Object)))
 basicCompile linker thing = do
-    forceAndReport "ST was valid" st
     (graph, envExprs) <- runM $ do
+        forceLog "ST was valid" st
         (alang, envExprs) <- toALang (mkRegistry linker) st
-        forceAndReport "alang converted" alang
+        forceLog "alang converted" alang
         liftIO $ print alang
         -- liftIO $ writeFile "alang-dump" $ show alang
-        graph <- pipeline (noCustomPasses :: CustomPasses (OhuaT Object IO)) {passAfterDFLowering = cleanUnits} alang
-        forceAndReport "graph created" graph
+        graph <- pipeline noCustomPasses {passAfterDFLowering = cleanUnits} alang
+        forceLog "graph created" graph
         pure (graph, envExprs)
-    forceAndReport "Compilation done" graph
     printAsTable $ graph
     pure (graph, envExprs)
   where
     st = fromNative thing
-    runM ac = fmap (either (error . T.unpack) id) $ runOhuaT0IO opts ac (definedBindings st)
+    runM ac = fmap (either (error . T.unpack) id) $ runFromBindings opts ac (definedBindings st)
 
 
 evalExprs :: IsLinker -> Seq (Either (Unevaluated Object) (NLazy Object)) -> IO (Seq (NLazy Object))
@@ -99,7 +98,7 @@ nativeCompileAlgo linker thing = do
     toNative . Algo alang <$> evalExprs linker envExprs
   where
     st = fromNative thing
-    runM ac = fmap (either (error . T.unpack) id) $ runOhuaT0IO opts ac (definedBindings st)
+    runM ac = fmap (either (error . T.unpack) id) $ runFromBindings opts ac (definedBindings st)
 
 
 nativeCompileWithoutEnvEval :: IsLinker -> Object -> IO (NGraph Object)

@@ -118,18 +118,13 @@ isAlgo b' = (($ b) . registryResolveAlgo) <$> view _2
   where b = toBinding b'
 
 
-assignIds :: MonadOhua env m => Expression -> m Expression
+assignIds :: (Monad m, MonadGenId m) => Expression -> m Expression
 assignIds e = do
     e' <- lrPostwalkExprM go e
     -- reset the id counter to the highest id currently assigned so as to avoid clashes
     -- futher in the compiler
-    onState $ \s ->
-        ( ()
-        , idCounter .~
-                max (s ^. idCounter)
-                (if HS.null ids then 0 else unFnId (maximum ids))
-            $ s
-        )
+    counterState <- generateId
+    resetIdCounter $ max counterState (if HS.null ids then 0 else maximum ids)
     pure e'
   where
     ids = foldr' f mempty e
@@ -147,9 +142,9 @@ assignIds e = do
 
 
 -- Discuss algos with no inputs with sebastian!
-toALang :: MonadOhua Object m => Registry -> ST -> m (Expression, Seq (Either (Unevaluated Object) (NLazy Object)))
+toALang :: Registry -> ST -> OhuaM Object (Expression, Seq (Either (Unevaluated Object) (NLazy Object)))
 toALang reg st = do
-    (a, s, ()) <- runRWST (go st) (noDeclaredSymbols, reg) (mempty, mempty, Nothing)
+    (a, s, ()) <- runRWST (go st) (noDeclaredSymbols, reg) (mempty, mempty)
     a' <- assignIds a
     pure (a', s ^. _1)
   where
@@ -172,7 +167,7 @@ toALang reg st = do
     go (Form (Sym sym:rest))
         | isLetSym sym = do
             when (sym == letStarSym) $
-                recordWarning "let should not be expanded to `let*`. \
+                logWarnN "let should not be expanded to `let*`. \
                             \When macroexpanding use `ohua.util/macroexpand-all` instead."
             case rest of
                 Vec v:statements -> handleLet (handleStatements statements) (partition 2 $ vectorToList v)
@@ -181,7 +176,7 @@ toALang reg st = do
         -- things like `(fn ([] ...))` perhaps we should ...
         | isAlgoSym sym = do
             when (sym == fnSym || sym == fnStarSym) $
-                recordWarning "DEPRECATED: The use of `fn` is deprecated, use `algo` instead."
+                logWarnN "DEPRECATED: The use of `fn` is deprecated, use `algo` instead."
             case rest of
                 Vec v:statements -> do
                     assigns <- mapM handleAssign (vectorToList v)
@@ -242,9 +237,9 @@ toALang reg st = do
 
     handleStatements [] = failWith "Expected at least one return form in"
     handleStatements [x] = go x
-    handleStatements (stmt:rest) = Let <$> (Direct <$> generateBindingWith "_") <*> go stmt <*> handleStatements rest
+    handleStatements (stmt:rest) = (Let . Direct <$> generateBindingWith "_") <*> go stmt <*> handleStatements rest
 
-    mkEnvExpr :: (ToEnvExpr e, MonadOhua Object m, MonadState s m, Field1' s (Seq (Either (Unevaluated Object) (NLazy Object)))) => e -> m Expression
+    mkEnvExpr :: (ToEnvExpr e, MonadReadEnvExpr m, MonadState s m, Field1' s (Seq (Either (Unevaluated Object) (NLazy Object))), MonadGenBnd m, MonadRecordEnvExpr m, EnvExpr m ~ Object) => e -> m Expression
     mkEnvExpr = fmap (Var . Env) . mkEnvRef
 
     mkEnvRef thing = do
