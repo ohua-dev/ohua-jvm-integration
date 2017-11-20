@@ -17,8 +17,8 @@ import Control.Applicative
 import Data.Monoid ((<>))
 import Control.Category ((>>>))
 
-beginMarker = "java -classpath \"$DIR/ohua-dummy-main.jar:"
-endMarker = "\""
+beginMarker = "$ETA_JAVA_CMD $JAVA_ARGS $JAVA_OPTS $ETA_JAVA_ARGS -classpath \"$DIR/ohua-dummy-main.jar:"
+endMarker = ":$ETA_CLASSPATH\""
 depInsertMarker = "(- insert-jar-deps -)"
 projectFile = "project.clj"
 templatePrefix = "template."

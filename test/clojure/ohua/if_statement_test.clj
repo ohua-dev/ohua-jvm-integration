@@ -5,20 +5,21 @@
 ;;;
 (ns ohua.if-statement-test
   (:require [clojure.test :refer :all :as test]
-            [com.ohua.lang :refer :all]
-            [com.ohua.testing :refer :all :as ohua-test]
-            [com.ohua.logging :as l]))
+            [ohua.lang :refer :all]
+            [ohua.testing :refer :all :as ohua-test]
+            [ohua.testutils :refer [compat-compile mk-cond]]))
 
 ; Try to see if we can salvage anything here after #8 and #6
 
-(ohua :import [com.ohua.lang.tests])
+(ohua :import [ohua.tests])
 
 (deftest condition-direct-input
   "testing the case where all input comes actually from another function or is an argument."
   []
-  (let [ohua-code (ohua
+  (let [ohua-code (compat-compile
                     (if (< 5 (write "some-arg"))
-                      (read (accept "some-id"))) :test-compile)]
+                      (read (accept "some-id"))
+                      nil) :test-compile)]
     (test/is
       (= (count ohua-code)
          ; 1 init stmt + 4 ops + 3 dependencies + 2 args + 1 condition + 1 compile stmt
@@ -26,27 +27,27 @@
       )
     (test/is (ohua-test/contains
                ohua-code
-               '((new com.ohua.lang.compile.FlowGraphCompiler)
-                  (.createOperator "com.ohua.lang/ifThenElse" 101)
-                  (.createOperator "com.ohua.lang.tests/write" 103)
-                  (.createOperator "com.ohua.lang.tests/read" 104)
-                  (.createOperator "com.ohua.lang.tests/accept" 105)
+               '((new ohua.lang.compile.FlowGraphCompiler)
+                  (.createOperator "ohua.lang/bool" 101)
+                  (.createOperator "ohua.lang.tests/write" 103)
+                  (.createOperator "ohua.lang.tests/read" 104)
+                  (.createOperator "ohua.lang.tests/accept" 105)
                   (.registerDependency 101 0 105 -1)
                   (.registerDependency 103 -1 101 1)
                   (.registerDependency 105 -1 104 0)
                   (.setArguments
                     101
                     (clojure.core/into-array
-                      com.ohua.lang.Tuple
-                      (clojure.core/list (com.ohua.lang.Tuple. (clojure.core/int 0) 'com.ohua.lang.Condition))))
+                      ohua.lang.Tuple
+                      (clojure.core/list (ohua.lang.Tuple. (clojure.core/int 0) 'ohua.lang.Condition))))
                   (.setArguments
                     103
-                    (clojure.core/into-array com.ohua.lang.Tuple
-                                             (clojure.core/list (com.ohua.lang.Tuple. (clojure.core/int 0) 'java.lang.String))))
+                    (clojure.core/into-array ohua.lang.Tuple
+                                             (clojure.core/list (ohua.lang.Tuple. (clojure.core/int 0) 'java.lang.String))))
                   (.setArguments
                     105
-                    (clojure.core/into-array com.ohua.lang.Tuple
-                                             (clojure.core/list (com.ohua.lang.Tuple. (clojure.core/int 0) 'java.lang.String))))
+                    (clojure.core/into-array ohua.lang.Tuple
+                                             (clojure.core/list (ohua.lang.Tuple. (clojure.core/int 0) 'java.lang.String))))
                   (.compile true)))
              )
     ))
@@ -54,10 +55,11 @@
 (deftest condition-indirect-input
   "testing the case where input comes from a variable."
   []
-  (let [ohua-code (ohua
+  (let [ohua-code (compat-compile
                     (let [[one _] (accept "some-id")]
                       (if (< 5 one)
-                        (parse (read "some-id")))) :test-compile)]
+                        (parse (read "some-id"))
+                        nil)) :test-compile)]
     (test/is
       (= (count ohua-code)
          ; init stmt + 4 ops + 3 dependencies + 2 args + 1 condition + compile stmt
@@ -66,10 +68,10 @@
       (ohua-test/contains
         ohua-code
         '(
-           (.createOperator "com.ohua.lang.tests/accept" 100)
-           (.createOperator "com.ohua.lang/ifThenElse" 102)
-           (.createOperator "com.ohua.lang.tests/parse" 104)
-           (.createOperator "com.ohua.lang.tests/read" 105)
+           (.createOperator "ohua.lang.tests/accept" 100)
+           (.createOperator "ohua.lang/bool" 102)
+           (.createOperator "ohua.lang.tests/parse" 104)
+           (.createOperator "ohua.lang.tests/read" 105)
            (.registerDependency 100 0 102 1)
            (.registerDependency 105 -1 104 0)
            (.registerDependency 102 0 105 -1))))
@@ -78,9 +80,10 @@
 (deftest branch-direct-input
   "testing the case where all input comes actually from another function or is an argument."
   []
-  (let [ohua-code (ohua
+  (let [ohua-code (compat-compile
                     (if (< 5 10)
-                      (read (accept "some-id"))) :test-compile)]
+                      (read (accept "some-id"))
+                      nil) :test-compile)]
     (test/is
       (= (count ohua-code)
          ; init stmt + 3 ops + 2 dependencies + 1 arg + 1 condition + compile stmt
@@ -88,19 +91,20 @@
     (test/is
       (ohua-test/contains
         ohua-code
-        '((.createOperator "com.ohua.lang/ifThenElse" 101)
-           (.createOperator "com.ohua.lang.tests/read" 103)
-           (.createOperator "com.ohua.lang.tests/accept" 104)
+        '((.createOperator "ohua.lang/bool" 101)
+           (.createOperator "ohua.lang.tests/read" 103)
+           (.createOperator "ohua.lang.tests/accept" 104)
            (.registerDependency 101 0 104 -1))))
     ))
 
 (deftest branch-indirect-input
   "testing the case where input comes from a variable."
   []
-  (let [ohua-code (ohua
+  (let [ohua-code (compat-compile
                     (let [[one _] (accept "some-id")]
                       (if (< 5 10)
-                        (read one))) :test-compile)]
+                        (read one)
+                        nil)) :test-compile)]
     (test/is
       (= (count ohua-code)
          ; init stmt + 3 ops + 2 dependencies + 1 arg + 1 condition + compile stmt
@@ -108,9 +112,9 @@
     (test/is
       (ohua-test/contains
         ohua-code
-        '((.createOperator "com.ohua.lang.tests/accept" 100)
-           (.createOperator "com.ohua.lang/ifThenElse" 102)
-           (.createOperator "com.ohua.lang.tests/read" 104)
+        '((.createOperator "ohua.lang.tests/accept" 100)
+           (.createOperator "ohua.lang/bool" 102)
+           (.createOperator "ohua.lang.tests/read" 104)
            (.registerDependency 100 0 104 0)
            (.registerDependency 102 0 104 -1))))
     ))
@@ -118,7 +122,7 @@
 (deftest branch-out-indexing
   "check whether inputs to the branches receive the proper out-idx"
   []
-  (let [ohua-code (ohua
+  (let [ohua-code (compat-compile
                     (let [[one two three four] (accept "some-id")]
                       (if (< 5 10)
                         (read one two)
@@ -130,10 +134,10 @@
     (test/is
       (ohua-test/contains
         ohua-code
-        '((.createOperator "com.ohua.lang.tests/accept" 100)
-           (.createOperator "com.ohua.lang/ifThenElse" 102)
-           (.createOperator "com.ohua.lang.tests/read" 104)
-           (.createOperator "com.ohua.lang.tests/write" 105)
+        '((.createOperator "ohua.lang.tests/accept" 100)
+           (.createOperator "ohua.lang/bool" 102)
+           (.createOperator "ohua.lang.tests/read" 104)
+           (.createOperator "ohua.lang.tests/write" 105)
            (.registerDependency 100 0 104 0)
            (.registerDependency 100 1 104 1)
            (.registerDependency 100 2 105 0)
@@ -145,7 +149,7 @@
 (deftest direct-condition-input
   "The condition is an operator."
   []
-  (let [ohua-code (ohua
+  (let [ohua-code (compat-compile
                     (if (accept "8080")
                       (read "arg0")
                       (write "arg1")) :test-compile)]
@@ -156,10 +160,10 @@
     (test/is
       (ohua-test/contains
         ohua-code
-        '((.createOperator "com.ohua.lang/ifThenElse" 101)
-           (.createOperator "com.ohua.lang.tests/accept" 103)
-           (.createOperator "com.ohua.lang.tests/read" 104)
-           (.createOperator "com.ohua.lang.tests/write" 105)
+        '((.createOperator "ohua.lang/bool" 101)
+           (.createOperator "ohua.lang.tests/accept" 103)
+           (.createOperator "ohua.lang.tests/read" 104)
+           (.createOperator "ohua.lang.tests/write" 105)
            (.registerDependency 103 -1 101 1)
            (.registerDependency 101 0 104 -1)
            (.registerDependency 101 1 105 -1)
@@ -169,13 +173,12 @@
 (deftest all-out-indexing
   "all outputs go to different places (condition, if-branch, else-branch)"
   []
-  (let [ohua-code (ohua
+  (let [ohua-code (compat-compile
                     (let [[one two three] (accept "some-id")]
                       (if (< 10 one)
                         (read two)
                         (write one three))) :test-compile)]
     ;      (l/enable-logging )
-    (l/write ohua-code :dispatch clojure.pprint/code-dispatch)
     (test/is
       (= (count ohua-code)
          ; init stmt + 4 ops + 6 dependencies + 1 arg + 1 condition + compile stmt
@@ -184,10 +187,10 @@
       (ohua-test/contains
         ohua-code
         '(
-           (.createOperator "com.ohua.lang.tests/accept" 100)
-           (.createOperator "com.ohua.lang/ifThenElse" 102)
-           (.createOperator "com.ohua.lang.tests/read" 104)
-           (.createOperator "com.ohua.lang.tests/write" 105)
+           (.createOperator "ohua.lang.tests/accept" 100)
+           (.createOperator "ohua.lang/bool" 102)
+           (.createOperator "ohua.lang.tests/read" 104)
+           (.createOperator "ohua.lang.tests/write" 105)
            (.registerDependency 100 0 102 1)
            (.registerDependency 100 1 104 0)
            (.registerDependency 100 0 105 0)
@@ -199,7 +202,7 @@
 (deftest multiple-sources
   "input comes from different sources and is used by different parts of the if statement"
   []
-  (let [ohua-code (ohua
+  (let [ohua-code (compat-compile
                     (let [one (accept "some-id")
                           two (accept "some-other-id")
                           three (accept "some-additional-other-id")]
@@ -207,7 +210,6 @@
                         (read two)
                         (write three))) :test-compile)]
     ;   (l/enable-logging )
-    (l/write ohua-code :dispatch clojure.pprint/code-dispatch)
 
     (test/is
       (= (count ohua-code)
@@ -216,12 +218,12 @@
     (test/is
       (ohua-test/contains
         ohua-code
-        '((.createOperator "com.ohua.lang.tests/accept" 100)
-           (.createOperator "com.ohua.lang.tests/accept" 101)
-           (.createOperator "com.ohua.lang.tests/accept" 102)
-           (.createOperator "com.ohua.lang/ifThenElse" 104)
-           (.createOperator "com.ohua.lang.tests/read" 106)
-           (.createOperator "com.ohua.lang.tests/write" 107)
+        '((.createOperator "ohua.lang.tests/accept" 100)
+           (.createOperator "ohua.lang.tests/accept" 101)
+           (.createOperator "ohua.lang.tests/accept" 102)
+           (.createOperator "ohua.lang/bool" 104)
+           (.createOperator "ohua.lang.tests/read" 106)
+           (.createOperator "ohua.lang.tests/write" 107)
            (.registerDependency 100 -1 104 1)
            (.registerDependency 101 -1 106 0)
            (.registerDependency 102 -1 107 0)
@@ -232,7 +234,7 @@
 (deftest if-two-args-test
   "The condition receives two arguments."
   []
-  (let [ohua-code (ohua (let [prod1 (produce)
+  (let [ohua-code (compat-compile (let [prod1 (produce)
                               prod2 (produce)]
                           (if (= prod1 prod2) (consume prod1) (consume prod2))) :test-compile)]
     ;      (l/enable-logging )
@@ -244,6 +246,8 @@
       ohua-code '((.registerDependency 100 -1 103 1)
                    (.registerDependency 101 -1 103 2)))
     ))
+
+(def mark vector)
 
 (deftest if-one-arg-run-test
   ""
@@ -273,27 +277,24 @@
 
 (deftest select-with-compiled-condition
   []
-  (l/enable-compilation-logging)
-  (let [ohua-code (ohua
+  (let [ohua-code (compat-compile
                     (consume
                       (if
                         (=
                           (accept "8080")
-                          'test)
+                          0)
                         (read "arg0")
                         (write "arg1"))) :test-compile)]
-    (l/enable-logging)
-    (l/write ohua-code :dispatch clojure.pprint/code-dispatch)
     (test/is (= (count ohua-code) 19))
     (test/is
       (ohua-test/contains
         ohua-code
-        '((.createOperator "com.ohua.lang.tests/consume" 100)
-           (.createOperator "com.ohua.lang/select" 101)
-           (.createOperator "com.ohua.lang/ifThenElse" 102)
-           (.createOperator "com.ohua.lang.tests/accept" 104)
-           (.createOperator "com.ohua.lang.tests/read" 105)
-           (.createOperator "com.ohua.lang.tests/write" 106)
+        '((.createOperator "ohua.lang.tests/consume" 100)
+           (.createOperator "ohua.lang/select" 101)
+           (.createOperator "ohua.lang/bool" 102)
+           (.createOperator "ohua.lang.tests/accept" 104)
+           (.createOperator "ohua.lang.tests/read" 105)
+           (.createOperator "ohua.lang.tests/write" 106)
            (.registerDependency 101 -1 100 0)
            (.registerDependency 102 0 101 0)
            (.registerDependency 105 -1 101 1)
@@ -305,7 +306,7 @@
 
 (deftest select-with-direct-condition-input
   []
-  (let [ohua-code (ohua
+  (let [ohua-code (compat-compile
                     (consume
                       (if (accept "8080")
                         (read "arg0")
@@ -314,12 +315,12 @@
     (test/is
       (ohua-test/contains
         ohua-code
-        '((.createOperator "com.ohua.lang.tests/consume" 100)
-           (.createOperator "com.ohua.lang/select" 101)
-           (.createOperator "com.ohua.lang/ifThenElse" 102)
-           (.createOperator "com.ohua.lang.tests/accept" 104)
-           (.createOperator "com.ohua.lang.tests/read" 105)
-           (.createOperator "com.ohua.lang.tests/write" 106)
+        '((.createOperator "ohua.lang.tests/consume" 100)
+           (.createOperator "ohua.lang/select" 101)
+           (.createOperator "ohua.lang/bool" 102)
+           (.createOperator "ohua.lang.tests/accept" 104)
+           (.createOperator "ohua.lang.tests/read" 105)
+           (.createOperator "ohua.lang.tests/write" 106)
            (.registerDependency 101 -1 100 0)
            (.registerDependency 102 0 101 0)
            (.registerDependency 105 -1 101 1)
@@ -331,7 +332,7 @@
 
 (deftest two-branch-select-destructing
   []
-  (let [ohua-code (ohua
+  (let [ohua-code (compat-compile
                     (let [result (if (accept "8080")
                                    (read "arg0")
                                    (write "arg1"))]
@@ -343,12 +344,12 @@
     (test/is
       (ohua-test/contains
         ohua-code
-        '((.createOperator "com.ohua.lang/select" 100)
-           (.createOperator "com.ohua.lang/ifThenElse" 101)
-           (.createOperator "com.ohua.lang.tests/accept" 103)
-           (.createOperator "com.ohua.lang.tests/read" 104)
-           (.createOperator "com.ohua.lang.tests/write" 105)
-           (.createOperator "com.ohua.lang.tests/consume" 106)
+        '((.createOperator "ohua.lang/select" 100)
+           (.createOperator "ohua.lang/bool" 101)
+           (.createOperator "ohua.lang.tests/accept" 103)
+           (.createOperator "ohua.lang.tests/read" 104)
+           (.createOperator "ohua.lang.tests/write" 105)
+           (.createOperator "ohua.lang.tests/consume" 106)
            (.registerDependency 100 -1 106 0)
            (.registerDependency 101 0 100 0)
            (.registerDependency 104 -1 100 1)
@@ -362,19 +363,20 @@
   "Testing the select creation for an if-statement with a single branches.
    Note: Of course the select in this case is overhead but we can optimize for this later."
   []
-  (let [ohua-code (ohua
+  (let [ohua-code (compat-compile
                     (consume
                       (if (accept "8080")
-                        (read "arg0"))) :test-compile)]
+                        (read "arg0")
+                        nil)) :test-compile)]
     (test/is (= (count ohua-code) 15))
     (test/is
       (ohua-test/contains
         ohua-code
-        '((.createOperator "com.ohua.lang.tests/consume" 100)
-           (.createOperator "com.ohua.lang/select" 101)
-           (.createOperator "com.ohua.lang/ifThenElse" 102)
-           (.createOperator "com.ohua.lang.tests/accept" 104)
-           (.createOperator "com.ohua.lang.tests/read" 105)
+        '((.createOperator "ohua.lang.tests/consume" 100)
+           (.createOperator "ohua.lang/select" 101)
+           (.createOperator "ohua.lang/bool" 102)
+           (.createOperator "ohua.lang.tests/accept" 104)
+           (.createOperator "ohua.lang.tests/read" 105)
            (.registerDependency 101 -1 100 0)
            (.registerDependency 102 0 101 0)
            (.registerDependency 105 -1 101 1)
@@ -386,49 +388,48 @@
 (deftest cond-stat-single
   "Tests the cond-statement with a single conditon-expression-pair."
   []
-  (let [ohua-code (ohua
+  (let [ohua-code (compat-compile
                     (let [one (accept "some-id")
                           two (accept "some-other-id")]
                       (cond (< 10 one) (read two)
                             ))
                     :test-compile)]
     ;(l/enable-logging)
-    (l/write ohua-code :dispatch clojure.pprint/code-dispatch)
     (test/is
       (ohua-test/contains
         ohua-code
-        '((new com.ohua.lang.compile.FlowGraphCompiler)
-           (.createOperator "com.ohua.lang.tests/accept" 100)
-           (.createOperator "com.ohua.lang.tests/accept" 101)
-           (.createOperator "com.ohua.lang/ifThenElse" 103)
-           (.createOperator "com.ohua.lang.tests/read" 105)
+        '((new ohua.lang.compile.FlowGraphCompiler)
+           (.createOperator "ohua.lang.tests/accept" 100)
+           (.createOperator "ohua.lang.tests/accept" 101)
+           (.createOperator "ohua.lang/bool" 103)
+           (.createOperator "ohua.lang.tests/read" 105)
            (.registerDependency 100 -1 103 1)
            (.registerDependency 101 -1 105 0)
            (.registerDependency 103 0 105 -1)
            (.setArguments
              100
              (clojure.core/into-array
-               com.ohua.lang.Tuple
+               ohua.lang.Tuple
                (clojure.core/list
-                 (com.ohua.lang.Tuple.
+                 (ohua.lang.Tuple.
                    (clojure.core/int 0)
                    'java.lang.String))))
            (.setArguments
              101
              (clojure.core/into-array
-               com.ohua.lang.Tuple
+               ohua.lang.Tuple
                (clojure.core/list
-                 (com.ohua.lang.Tuple.
+                 (ohua.lang.Tuple.
                    (clojure.core/int 0)
                    'java.lang.String))))
            (.setArguments
              103
              (clojure.core/into-array
-               com.ohua.lang.Tuple
+               ohua.lang.Tuple
                (clojure.core/list
-                 (com.ohua.lang.Tuple.
+                 (ohua.lang.Tuple.
                    (clojure.core/int 0)
-                   'com.ohua.lang.Condition))))
+                   'ohua.lang.Condition))))
            (.compile true)))
       )
     ))
@@ -436,12 +437,12 @@
 (deftest nested-if
   "Tests simple nested if construction."
   []
-  (let [ohua-code (ohua
+  (let [ohua-code (compat-compile
                     (let [one (accept "some-id")
                           two (accept "some-other-id")
                           three (accept "third-id")]
                       (if (< 10 one) (read two)
-                                     (if (< 20 one) (write three))
+                                     (if (< 20 one) (write three) nil)
                                      ))
                     :test-compile)]
     ;   (l/enable-logging)
@@ -451,15 +452,15 @@
     (test/is
       (ohua-test/contains
         ohua-code
-        '((.createOperator "com.ohua.lang.tests/accept" 100)
-           (.createOperator "com.ohua.lang.tests/accept" 101)
-           (.createOperator "com.ohua.lang.tests/accept" 102)
-           (.createOperator "com.ohua.lang/ifThenElse" 104)
-           (.createOperator "com.ohua.lang.tests/read" 106)
-           (.createOperator "com.ohua.lang/scope" 107)
-           (.createOperator "com.ohua.lang/ifThenElse" 109)
-           (.createOperator "com.ohua.lang/scope" 111)
-           (.createOperator "com.ohua.lang.tests/write" 112)
+        '((.createOperator "ohua.lang.tests/accept" 100)
+           (.createOperator "ohua.lang.tests/accept" 101)
+           (.createOperator "ohua.lang.tests/accept" 102)
+           (.createOperator "ohua.lang/bool" 104)
+           (.createOperator "ohua.lang.tests/read" 106)
+           (.createOperator "ohua.lang/scope" 107)
+           (.createOperator "ohua.lang/bool" 109)
+           (.createOperator "ohua.lang/scope" 111)
+           (.createOperator "ohua.lang.tests/write" 112)
            (.registerDependency 100 -1 104 1)
            (.registerDependency 101 -1 106 0)
            (.registerDependency 102 -1 107 0)
@@ -475,22 +476,23 @@
 (deftest if-with-let-on-branch
   "Has a let on the branch which is evaluated before the body of the let."
   []
-  (let [ohua-code (ohua
+  (let [ohua-code (compat-compile
                     (let [one (accept "some-id")
                           two (accept "some-other-id")]
                       (if (< 10 one)
-                        (let [r (add (read two))] (write r))))
+                        (let [r (add (read two))] (write r))
+                        nil))
                     :test-compile)]
     (test/is
       (ohua-test/contains
         ohua-code
-        '((new com.ohua.lang.compile.FlowGraphCompiler)
-           (.createOperator "com.ohua.lang.tests/accept" 100)
-           (.createOperator "com.ohua.lang.tests/accept" 101)
-           (.createOperator "com.ohua.lang/ifThenElse" 103)
-           (.createOperator "com.ohua.lang.tests/add" 105)
-           (.createOperator "com.ohua.lang.tests/read" 106)
-           (.createOperator "com.ohua.lang.tests/write" 107)
+        '((new ohua.lang.compile.FlowGraphCompiler)
+           (.createOperator "ohua.lang.tests/accept" 100)
+           (.createOperator "ohua.lang.tests/accept" 101)
+           (.createOperator "ohua.lang/bool" 103)
+           (.createOperator "ohua.lang.tests/add" 105)
+           (.createOperator "ohua.lang.tests/read" 106)
+           (.createOperator "ohua.lang.tests/write" 107)
            (.registerDependency 100 -1 103 1)
            (.registerDependency 101 -1 106 0)
            (.registerDependency 105 -1 107 0)
@@ -498,41 +500,42 @@
            (.registerDependency 103 0 106 -1)
            (.setArguments
              100
-             (clojure.core/into-array com.ohua.lang.Tuple
-                                      (clojure.core/list (com.ohua.lang.Tuple. (clojure.core/int 0) 'java.lang.String))))
+             (clojure.core/into-array ohua.lang.Tuple
+                                      (clojure.core/list (ohua.lang.Tuple. (clojure.core/int 0) 'java.lang.String))))
            (.setArguments
              101
-             (clojure.core/into-array com.ohua.lang.Tuple
-                                      (clojure.core/list (com.ohua.lang.Tuple. (clojure.core/int 0) 'java.lang.String))))
+             (clojure.core/into-array ohua.lang.Tuple
+                                      (clojure.core/list (ohua.lang.Tuple. (clojure.core/int 0) 'java.lang.String))))
            (.setArguments
              103
              (clojure.core/into-array
-               com.ohua.lang.Tuple
-               (clojure.core/list (com.ohua.lang.Tuple. (clojure.core/int 0) 'com.ohua.lang.Condition))))
+               ohua.lang.Tuple
+               (clojure.core/list (ohua.lang.Tuple. (clojure.core/int 0) 'ohua.lang.Condition))))
            (.compile true))
         ))
     ))
 
 (deftest if-with-let-and-destructing-on-branch
   []
-  (let [ohua-code (ohua
+  (let [ohua-code (compat-compile
                     (let [one (accept "some-id")
                           two (accept "some-other-id")]
                       (if (< 10 one)
-                        (let [[r] (add (read two))] (write r))))
+                        (let [[r] (add (read two))] (write r))
+                        nil))
                     :test-compile)]
     ;   (l/enable-logging)
     ;   (l/write ohua-code :dispatch clojure.pprint/code-dispatch)
     (test/is
       (ohua-test/contains
         ohua-code
-        '((new com.ohua.lang.compile.FlowGraphCompiler)
-           (.createOperator "com.ohua.lang.tests/accept" 100)
-           (.createOperator "com.ohua.lang.tests/accept" 101)
-           (.createOperator "com.ohua.lang/ifThenElse" 103)
-           (.createOperator "com.ohua.lang.tests/add" 105)
-           (.createOperator "com.ohua.lang.tests/read" 106)
-           (.createOperator "com.ohua.lang.tests/write" 107)
+        '((new ohua.lang.compile.FlowGraphCompiler)
+           (.createOperator "ohua.lang.tests/accept" 100)
+           (.createOperator "ohua.lang.tests/accept" 101)
+           (.createOperator "ohua.lang/bool" 103)
+           (.createOperator "ohua.lang.tests/add" 105)
+           (.createOperator "ohua.lang.tests/read" 106)
+           (.createOperator "ohua.lang.tests/write" 107)
            (.registerDependency 100 -1 103 1)
            (.registerDependency 101 -1 106 0)
            (.registerDependency 106 -1 105 0)
@@ -540,17 +543,17 @@
            (.registerDependency 103 0 106 -1)
            (.setArguments
              100
-             (clojure.core/into-array com.ohua.lang.Tuple
-                                      (clojure.core/list (com.ohua.lang.Tuple. (clojure.core/int 0) 'java.lang.String))))
+             (clojure.core/into-array ohua.lang.Tuple
+                                      (clojure.core/list (ohua.lang.Tuple. (clojure.core/int 0) 'java.lang.String))))
            (.setArguments
              101
-             (clojure.core/into-array com.ohua.lang.Tuple
-                                      (clojure.core/list (com.ohua.lang.Tuple. (clojure.core/int 0) 'java.lang.String))))
+             (clojure.core/into-array ohua.lang.Tuple
+                                      (clojure.core/list (ohua.lang.Tuple. (clojure.core/int 0) 'java.lang.String))))
            (.setArguments
              103
              (clojure.core/into-array
-               com.ohua.lang.Tuple
-               (clojure.core/list (com.ohua.lang.Tuple. (clojure.core/int 0) 'com.ohua.lang.Condition))))
+               ohua.lang.Tuple
+               (clojure.core/list (ohua.lang.Tuple. (clojure.core/int 0) 'ohua.lang.Condition))))
            (.compile true))
         ))
     ))
@@ -561,7 +564,7 @@
   (test/is
     (=
       200
-      (com.ohua.lang/<-ohua
+      (ohua.lang/<-ohua
         (let [one (id (int 100))]
           (if one
             (add one 100)
@@ -576,7 +579,7 @@
   (test/is
     (=
       0
-      (com.ohua.lang/<-ohua
+      (ohua.lang/<-ohua
         (let [one (id (int 100))
               c (id false)]
           (if c
@@ -592,7 +595,7 @@
   (test/is
     (=
       0
-      (com.ohua.lang/<-ohua
+      (ohua.lang/<-ohua
         (let [one (id (int 100))
               c (id false)
               added (add one 100)
@@ -611,7 +614,7 @@
   (test/is
     (=
       0
-      (com.ohua.lang/<-ohua
+      (ohua.lang/<-ohua
         (if (id false) 100 0))
       )
     )
@@ -623,7 +626,7 @@
   (test/is
     (=
       0
-      (com.ohua.lang/<-ohua
+      (ohua.lang/<-ohua
         (let [one (id (int 100))]
           (if (id false)
             (add one 100)
@@ -639,7 +642,7 @@
   (test/is
     (=
       0
-      (com.ohua.lang/<-ohua
+      (ohua.lang/<-ohua
         (let [one (id (int 100))]
           (if false
             (add one 100)
@@ -654,7 +657,7 @@
 ;  (test/is
 ;    (=
 ;      0
-;      (com.ohua.lang/<-ohua
+;      (ohua.lang/<-ohua
 ;        (let [one (id (int 100))]
 ;          (if (<
 ;                (let [two (add one 200)]

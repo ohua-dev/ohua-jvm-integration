@@ -10,7 +10,7 @@
   (:require [ohua.link :refer :all]
             [clojure.test :refer [deftest is]]
             [ohua.linker-test]))
-(ohua-require [ohua.lang.tests :refer [write] :as tests])
+(ohua-require [ohua.tests :refer [write] :as tests])
 
 
 (deftest linker-spill-test

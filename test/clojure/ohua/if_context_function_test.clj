@@ -6,23 +6,23 @@
 (ns ohua.if-context-function-test
   (:require [clojure.test :as test :refer [deftest is]]
             [clojure.walk :as walk]
-            [ohua.logging :as l]
-            [ohua.testing :as ohua-test])
+            [ohua.testing :as ohua-test]
+            [ohua.testutils :as testutils]
+            [ohua.util :as util])
   (:use ohua.lang))
 
 ; Try this one after closing #8 and #6
 
-(ohua :import [ohua.lang.tests])
+(ohua :import [ohua.tests])
 
 (deftest if-executes-compile
-  (let [code '(ohua.lang/ohua
+  (let [code '(testutils/compat-compile
                 (ohua.lang/smap (fn [n]
                                       (if (= 1 1) (_const 5) (_const 1)))
                                     [1 2 3 4 5 6 7 8 9 10]))
-        compiled (walk/macroexpand-all code)
+        compiled (util/macroexpand-all code)
         [ops deps] (ohua.testing/filter-special-ops compiled '("ifThenElse" "_const"))]
     ;(l/enable-logging)
-    (l/write compiled :dispatch clojure.pprint/code-dispatch)
     (ohua-test/compare-deep-code (concat ops deps)
                                  '((. ^:skip-comparison G__2231 createOperator ifThenElse 107)
                                     (. ^:skip-comparison G__2231 createOperator _const 109)
@@ -34,14 +34,13 @@
     ))
 
 (deftest support-for-fns-without-args
-  (let [code '(ohua.lang/ohua
+  (let [code '(testutils/compat-compile
                 (ohua.lang/smap (fn [n]
                                       (if (= 1 1) (const5) (const1)))
                                     [1 2 3 4 5 6 7 8 9 10]))
-        compiled (walk/macroexpand-all code)
+        compiled (util/macroexpand-all code)
         [ops deps] (ohua.testing/filter-special-ops compiled '("ifThenElse" "const5" "const1"))]
     ;(l/enable-logging)
-    (l/write compiled :dispatch clojure.pprint/code-dispatch)
     (ohua-test/compare-deep-code (concat ops deps)
                                  '((. ^:skip-comparison G__2284 createOperator ifThenElse 107)
                                     (. ^:skip-comparison G__2284 createOperator const5 109)
@@ -59,7 +58,8 @@
                   (<-ohua
                     (smap (fn [n]
                             (if (= 1 1)
-                              (_const 5)))
+                              (_const 5)
+                              (_const nil)))
                           data))))))
 
 (deftest if-executes-context-without-env-args
@@ -70,5 +70,6 @@
                   (<-ohua
                     (smap (fn [n]
                             (if (= 1 1)
-                              (const5)))
+                              (const5)
+                              (_const nil)))
                           data))))))

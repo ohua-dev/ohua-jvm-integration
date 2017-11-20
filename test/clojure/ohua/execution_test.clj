@@ -19,6 +19,6 @@
   (test/is 20
            (<-ohua (add ten 10)))
   ; does not work! the question is: should we support such a think ever??? all the function could ever do is a state change.
-  (test/is 20
-           (ohua (add ten 10)))
+  ; (test/is 20
+  ;          (ohua (add ten 10)))
   )

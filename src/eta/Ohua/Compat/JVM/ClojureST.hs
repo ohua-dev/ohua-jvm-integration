@@ -3,10 +3,12 @@ module Ohua.Compat.JVM.ClojureST where
 
 import           Control.DeepSeq
 import           Data.Hashable
+import           Data.Monoid
+import qualified Data.Sequence   as S
 import qualified Data.Text       as T
 import           Java
-import Ohua.ALang.Lang (Expression)
-import qualified Data.Sequence as S
+import           Ohua.ALang.Lang (Expression)
+import           Ohua.Util
 
 
 data ST
@@ -14,6 +16,12 @@ data ST
     | Form [ST]
     | Sym Symbol
     | Vec Vector
+
+instance ShowT ST where
+    showT (Literal _)  = "Object"
+    showT (Form exprs) = "(" <> T.intercalate " " (map showT exprs) <> ")"
+    showT (Sym s)      = showT s
+    showT (Vec v)      = showT v
 
 instance NFData ST where
     rnf (Literal o) = ()
@@ -25,7 +33,7 @@ instance Eq ST where
     Form f1 == Form f2 = f1 == f2
     Sym s1 == Sym s2 = s1 == s2
     Vec v1 == Vec v2 = v1 == v2
-    Literal l1 == Literal l2 = True -- FIXME
+    Literal l1 == Literal l2 = equals l1 l2 -- FIXME
     _ == _ = False
 
 data Symbol = Symbol
@@ -36,7 +44,13 @@ data Symbol = Symbol
 instance NFData Symbol where
     rnf (Symbol ns n) = ns `deepseq` n `deepseq` ()
 
+instance ShowT Symbol where
+    showT (Symbol ns name) = maybe "" (<> "/") ns <> name
+
 newtype Vector = Vector { vectorToList :: [ST] } deriving Eq
+
+instance ShowT Vector where
+    showT (Vector exprs) = "[" <> T.intercalate " " (map showT exprs) <> "]"
 
 instance NFData Vector where
     rnf (Vector v) = v `deepseq` ()

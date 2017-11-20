@@ -3,7 +3,8 @@
             [ohua.util :refer [+option macroexpand-all report-option-type]]
             [ohua.link]
             [clojure.pprint])
-  (:import (ohua.graph Source$Env Source$Local)))
+  (:import (ohua.graph Source$Env Source$Local)
+           (ohua.lang Condition)))
 
 
 (defn is-local-arc? [arc]
@@ -81,3 +82,8 @@
   `(let [gr# (ohua.lang/ohua ~code :test-compile)]
     (test/is (= ~ops (count (.operators gr#))))
     (test/is (= ~arcs (count (.arcs gr#))))))
+
+
+(defn mk-cond [thing]
+  (reify Condition
+    (check [_ _] (boolean thing))))

@@ -71,6 +71,7 @@ library
     , TypeSynonymInstances
     , LambdaCase
     , TupleSections
+  ghc-options: -optjavac "-source 1.8 -target 1.8"
   if flag(debug)
     cpp-options: -DDEBUG=1
   maven-depends:

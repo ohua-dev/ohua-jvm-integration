@@ -164,10 +164,10 @@ toALang reg st = do
                 (Nothing, Nothing) -> mkEnvExpr s
     go (Vec v) = mkEnvExpr v
     go (Form []) = failWith "Empty form"
-    go (Form (Sym sym:rest))
+    go form@(Form (Sym sym:rest))
         | isLetSym sym = do
             when (sym == letStarSym) $
-                logWarnN "let should not be expanded to `let*`. \
+                logWarnN "let should not be expanded to `let*`. This may cause compile failures. \
                             \When macroexpanding use `ohua.util/macroexpand-all` instead."
             case rest of
                 Vec v:statements -> handleLet (handleStatements statements) (partition 2 $ vectorToList v)
@@ -177,16 +177,22 @@ toALang reg st = do
         | isAlgoSym sym = do
             when (sym == fnSym || sym == fnStarSym) $
                 logWarnN "DEPRECATED: The use of `fn` is deprecated, use `algo` instead."
+            when (sym == fnStarSym) $
+                logWarnN "fn should not be expanded to fn*. This may cause compile failures. \
+                        \When macroexpanding use `ohua.util/macroexpand-all` instead."
             case rest of
                 Vec v:statements -> do
                     assigns <- mapM handleAssign (vectorToList v)
                     ($) <$> mkLams assigns <*> registerBnds (assigns >>= flattenAssign) (handleStatements statements)
-                _ -> failWith "Exprected binding vector"
+                _ -> failWith $ "Exprected binding vector in algo form " <> showT form
         | isIfSym sym = do
             (cond, then_, else_) <-
                 case rest of
                     -- for support of no-else-statement
-                    -- [condition, then_] -> pure (condition, then_, Nothing)
+                    [condition, then_] ->
+                        -- pure (condition, then_, Nothing)
+                        failWith $ "NOT SUPPORTED: If with only two arguments is not supported \
+                                   \yet. See Issue #14."
                     [condition, then_, else_] -> pure (condition, then_, Just else_)
                     _ -> failWith $ "Wrong number of arguments for `if`. Expected 3, got " <> showT (length rest)
             c <- go cond

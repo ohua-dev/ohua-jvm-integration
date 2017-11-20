@@ -3,10 +3,10 @@
 
 
 
-(defn macroexpand-all 
+(defn macroexpand-all
   "A custom version of `clojure.walk/macroexpand-all` which does not expand `let` bindings."
   [form]
-  (w/prewalk #(if (and (seq? %) (not (= 'let (first %)))) (macroexpand %) %) form))
+  (w/prewalk #(if (and (seq? %) (not (#{'let 'fn 'algo} (first %)))) (macroexpand %) %) form))
 
 
 (defn report-option-type [option]
@@ -14,8 +14,8 @@
 
 
 (defn +option [map option]
-  
-  (cond 
+
+  (cond
     (set? map) (conj map option)
     (map? map) (assoc map option true)
     (keyword? map) (conj #{map} option)
