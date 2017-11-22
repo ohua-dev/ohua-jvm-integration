@@ -16,9 +16,8 @@ import Data.Function
 import Control.Applicative
 import Data.Monoid ((<>))
 import Control.Category ((>>>))
+import System.Process
 
-beginMarker = "$ETA_JAVA_CMD $JAVA_ARGS $JAVA_OPTS $ETA_JAVA_ARGS -classpath \"$DIR/ohua-dummy-main.jar:"
-endMarker = ":$ETA_CLASSPATH\""
 depInsertMarker = "(- insert-jar-deps -)"
 projectFile = "project.clj"
 templatePrefix = "template."
@@ -32,17 +31,12 @@ notice = T.append "; " $ T.intercalate "\n; "
     ]
 
 
--- | Extract the list of jar deps from the input file
-extract
-    =   snd . T.breakOn beginMarker
-    >>> fromMaybe (error "marker did not start string") . T.stripPrefix beginMarker
-    >>> fst . T.breakOn endMarker
-    >>> T.splitOn ":"
-
 main = do
     deps <- T.intercalate " "
             . map (\t -> '"' `T.cons` t `T.snoc` '"')
-            . extract
-            <$> T.readFile "dist/build/ohua-dummy-main/ohua-dummy-main"
+            . init
+            . T.splitOn "\n"
+            . T.pack
+            <$> readCreateProcess (proc "etlas" ["deps", "--classpath", "lib:ohua-jvm-integration"]) ""
     template <- T.readFile templateFile
     T.writeFile projectFile $ T.intercalate deps (T.splitOn depInsertMarker template) `T.snoc` '\n' <> notice
