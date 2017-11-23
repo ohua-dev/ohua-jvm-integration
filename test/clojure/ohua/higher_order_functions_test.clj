@@ -27,19 +27,19 @@
 
 ; FIXME see issue #160
 ; FIXME Needs #7
-(deftest apply-run-on-dynamic-func-ref
- "Tests the apply functionality at runtime on a function object."
- ;  (ohua (let [prod (produce)]
- ;            (if (< prod 3) (consume prod if-result) (consume prod else-result))))
- (let [result (int-array [0])]
-   (ohua (let [[prod consume-fn] (produceFn)] (apply consume-fn prod result)))
-;    (println result)
-   (test/is (= (first result) 111)))
- )
+; (deftest apply-run-on-dynamic-func-ref
+;  "Tests the apply functionality at runtime on a function object."
+;  ;  (ohua (let [prod (produce)]
+;  ;            (if (< prod 3) (consume prod if-result) (consume prod else-result))))
+;  (let [result (int-array [0])]
+;    (ohua (let [[prod consume-fn] (produceFn)] (apply consume-fn prod result)))
+; ;    (println result)
+;    (test/is (= (first result) 111)))
+;  )
 
 
 ; FIXME currently these fail
-;(deftest partial-run
+; (deftest partial-run
 ;  "Tests the partial functionality at runtime."
 ;  (l/enable-compilation-logging )
 ;  (let [result (int-array [0])]
@@ -48,10 +48,21 @@
 ;    (println result)
 ;    (test/is (= (first result) 9)))
 ;  )
-;
-;(deftest partial-call-run
+
+; Same as above but with a clojure function
+(deftest partial-run
+ "Tests the partial functionality at runtime."
+ (let [result (atom nil)
+       local-consume (fn [value var] (reset! var value))]
+   (ohua (let [prod (produce )
+               consume-fn (clojure.core/partial local-consume prod)] 
+      (apply consume-fn result)))
+   (println @result)
+   (test/is (= @result 111)))
+ )
+
+; (deftest partial-call-run
 ;  "Tests the partial functionality at runtime but calls the function directly."
-;  (l/enable-compilation-logging )
 ;  (let [result (int-array [0])]
 ;    (ohua (let [prod (produce )
 ;                consume-fn (partial consume prod)] (consume-fn result)))

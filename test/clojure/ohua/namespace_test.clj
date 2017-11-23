@@ -7,8 +7,7 @@
   (:require [clojure.test :refer :all :as test]
             [ohua.lang :refer :all]
             [ohua.testing :refer :all :as ohua-test]
-            [clojure.pprint]
-            [ohua.testutils :refer [mk-cond]]))
+            [clojure.pprint]))
 
 (ohua :import [ohua.tests])
 
@@ -32,7 +31,7 @@
                      (fn [prod_]
                         (let [prod (mytrace "array" prod_)]
                        (mytrace "after if"
-                          (if (mk-cond (< prod 3))
+                          (if (< prod 3)
                             (ohua.tests/add (mytrace "delay" (mytrace "delay" prod)) 100)
                             (ohua.tests/subtract prod 3)))))
                      input))]

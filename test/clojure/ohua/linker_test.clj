@@ -7,7 +7,7 @@
 ;
 
 (ns ohua.linker-test
-  (:require [ohua.link :refer :all]
+  (:require [ohua.link :refer :all :as link]
             [clojure.test :refer [deftest is use-fixtures]]))
 
 
@@ -17,6 +17,8 @@
 
 (use-fixtures :once fixture)
 
+
+(ohua-require [ohua.tests :refer [write] :as tests])
 
 (deftest import-test
   (is (is-imported? 'ohua.tests))
@@ -32,8 +34,8 @@
 
 (deftest as-test
   (is (is-aliased? 'tests))
-  (is (not (nil? (resolve 'tests/accept))))
+  (is (not (nil? (link/resolve 'tests/accept))))
   (is (=
-        (resolve 'tests/accept)
-        (resolve 'ohua.tests/accept)))
-  (is (not (nil? (resolve 'tests/write)))))
+        (link/resolve 'tests/accept)
+        (link/resolve 'ohua.tests/accept)))
+  (is (not (nil? (link/resolve 'tests/write)))))

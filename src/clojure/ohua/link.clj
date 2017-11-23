@@ -84,35 +84,33 @@
        :class (.getDeclaringClass m)})))
 
 (defn ohua-unalias [sym]
-  (if (and (symbol? sym) (not (nil? (namespace sym))))
-    sym
-    (let [name- (cond
-                  (symbol? sym) (name sym)
-                  (string? sym) sym
-                  :else (throw (IllegalArgumentException. "Unexpected type for name.")))]
-      (if-let [dealiased (@(.-alias_registry (get-linker)) name-)]
-        dealiased
-        (let [refer-all-candidates (filter #(.exists backend % name-) @(.refers_all (get-linker)))]
-          (case (count refer-all-candidates)
-            0 nil
-            1 (let [[ns-ref] refer-all-candidates
-                    qual-sym (symbol ns-ref name-)]
-                (ohua-alias qual-sym name-)
-                qual-sym)
-            (throw (Exception. (str "Ambiguous ocurrence of name \"" name- "\" it is defined in these namespaces: " (into [] refer-all-candidates))))))))))
+  (cond 
+    (not (symbol? sym)) (throw (Exception. (str "Unalias requires a symbol, got " sym " (" (type sym) ")")))
+    (not (nil? (namespace sym))) (if-let [new-ns (@(.-alias_registry (get-linker)) (namespace sym))] (symbol new-ns (name sym)) sym)
+    :else (let [name- (cond
+                        (symbol? sym) (name sym)
+                        (string? sym) sym
+                        :else (throw (IllegalArgumentException. "Unexpected type for name.")))]
+            (if-let [dealiased (@(.-alias_registry (get-linker)) name-)]
+              dealiased
+              (let [refer-all-candidates (filter #(.exists backend % name-) @(.refers_all (get-linker)))]
+                (case (count refer-all-candidates)
+                  0 nil
+                  1 (let [[ns-ref] refer-all-candidates
+                          qual-sym (symbol ns-ref name-)]
+                      (ohua-alias qual-sym name-)
+                      qual-sym)
+                  (throw (Exception. (str "Ambiguous ocurrence of name \"" name- "\" it is defined in these namespaces: " (into [] refer-all-candidates))))))))))
 
 (defn resolve [name-str]
   (let [sym (symbol name-str)]
-    (if-let [unaliased (if (nil? (namespace sym))
-                        (ohua-unalias sym)
-                        sym)]
+    (if-let [unaliased (ohua-unalias sym)]
       (if (and
             (contains? @(.-imported_namespaces (get-linker)) (namespace unaliased))
             (.exists backend (namespace unaliased) (name unaliased)))
         (str unaliased)))))
 
 (defn ohua-require-fn
-
   [& args]
   (doseq [spec args]
     (cond
@@ -128,7 +126,7 @@
                          :as (do
                                (assert (and (symbol? data)
                                             (not (namespace data))))
-                               (ohua-alias ns-ref (name data)))
+                               (ohua-alias (name ns-ref) (name data)))
                          :refer (let [ns-str (name ns-ref)]
                                   (case data
                                     :all (swap! (.refers_all (get-linker)) conj (->ns-string ns-ref))

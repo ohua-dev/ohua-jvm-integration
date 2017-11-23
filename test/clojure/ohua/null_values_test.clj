@@ -1,7 +1,6 @@
 (ns ohua.null-values-test
   (:require [clojure.test :refer :all :as test]
-            [ohua.lang :refer :all]
-            [ohua.testutils :refer [mk-cond]]))
+            [ohua.lang :refer :all]))
 
 (ohua-require [ohua.tests :refer [add subtract]])
 
@@ -16,7 +15,7 @@
       (<-ohua
         (let [one (id _100)
               c (id nil)]
-          (if (mk-cond c)
+          (if (not (nil? c))
             (add one _100)
             (subtract one _100))))
       )

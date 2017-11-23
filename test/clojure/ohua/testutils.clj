@@ -37,8 +37,9 @@
     (let [option (+option option0 :test-compile)
           ; TODO do not eval env arcs
           gr (ohua.Compiler/compileAndSpliceEnv
+                  (lang/mk-hs-compile-options option)
                   (first (ohua.link/clj-linker))
-                  (ptrace (macroexpand-all code)))
+                  (macroexpand-all code))
           rename-op-types (if (:strip-ns option) #(name (symbol %)) identity)
           ops (map
                 (fn [op] `(.createOperator ~(rename-op-types(.type op)) ~(adjust-op-id (.id op))))
@@ -82,8 +83,3 @@
   `(let [gr# (ohua.lang/ohua ~code :test-compile)]
     (test/is (= ~ops (count (.operators gr#))))
     (test/is (= ~arcs (count (.arcs gr#))))))
-
-
-(defn mk-cond [thing]
-  (reify Condition
-    (check [_ _] (boolean thing))))

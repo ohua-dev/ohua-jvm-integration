@@ -30,7 +30,7 @@ main = do
     hPutStrLn stderr $ show converted
 
     let !bnds = definedBindings converted
-    Right c <- flip (runFromBindings opts) bnds $ do
+    Right c <- runStderrLoggingT $ flip (runFromBindings opts) bnds $ do
         (alang, envs) <- toALang reg converted
         liftIO $ putStrLn $ show alang
         p <- pipeline noCustomPasses alang

@@ -5,6 +5,12 @@
             [ohua.util :refer [macroexpand-all report-option-type +option]])
   (:import java.util.concurrent.atomic.AtomicReference))
 
+(defn mk-hs-compile-options [opts]
+  (if (:logging opts)
+    (if (set? opts)
+      (throw (Exception. "Options must be map to set the logging level!"))
+      (:logging opts))
+    :warning))
 
 (defmacro algo
   "Compile an algo. This produces alang as output.
@@ -14,6 +20,7 @@
   [args & code]
   (let [[linker gen-init-code] (ohua.link/clj-linker)
         a (ohua.Compiler/compileAlgo
+            (mk-hs-compile-options {})
             linker
             (cons 'algo
               (cons args code)))
@@ -57,6 +64,7 @@
             [code identity])
           [linker gen-init-code] (ohua.link/clj-linker)
           graph (ohua.Compiler/compileAndSpliceEnv
+                  (mk-hs-compile-options option)
                   linker
                   (macroexpand-all code-with-capture))]
       (if (option :test-compile)

@@ -48,3 +48,6 @@ read s = fromMaybe (error $ "Could not read " ++ s) <$> mRead s
 
 coreVar :: String -> IFn
 coreVar v = unsafeDupablePerformIO $ varNS "clojure.core" v
+
+keyword :: String -> Object
+keyword = pureJavaWith (coreVar "keyword") . invoke1 . (superCast :: JString -> Object) . toJava

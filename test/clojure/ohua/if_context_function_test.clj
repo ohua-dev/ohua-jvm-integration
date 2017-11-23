@@ -11,45 +11,7 @@
             [ohua.util :as util])
   (:use ohua.lang))
 
-; Try this one after closing #8 and #6
-
 (ohua :import [ohua.tests])
-
-(deftest if-executes-compile
-  (let [code '(testutils/compat-compile
-                (ohua.lang/smap (fn [n]
-                                      (if (= 1 1) (_const 5) (_const 1)))
-                                    [1 2 3 4 5 6 7 8 9 10]))
-        compiled (util/macroexpand-all code)
-        [ops deps] (ohua.testing/filter-special-ops compiled '("ifThenElse" "_const"))]
-    ;(l/enable-logging)
-    (ohua-test/compare-deep-code (concat ops deps)
-                                 '((. ^:skip-comparison G__2231 createOperator ifThenElse 107)
-                                    (. ^:skip-comparison G__2231 createOperator _const 109)
-                                    (. ^:skip-comparison G__2231 createOperator _const 110)
-                                    (. ^:skip-comparison G__2231 registerDependency 109 -1 106 0)
-                                    (. ^:skip-comparison G__2231 registerDependency 110 -1 106 1)
-                                    (. ^:skip-comparison G__2231 registerDependency 107 0 109 -1)
-                                    (. ^:skip-comparison G__2231 registerDependency 107 1 110 -1)))
-    ))
-
-(deftest support-for-fns-without-args
-  (let [code '(testutils/compat-compile
-                (ohua.lang/smap (fn [n]
-                                      (if (= 1 1) (const5) (const1)))
-                                    [1 2 3 4 5 6 7 8 9 10]))
-        compiled (util/macroexpand-all code)
-        [ops deps] (ohua.testing/filter-special-ops compiled '("ifThenElse" "const5" "const1"))]
-    ;(l/enable-logging)
-    (ohua-test/compare-deep-code (concat ops deps)
-                                 '((. ^:skip-comparison G__2284 createOperator ifThenElse 107)
-                                    (. ^:skip-comparison G__2284 createOperator const5 109)
-                                    (. ^:skip-comparison G__2284 createOperator const1 110)
-                                    (. ^:skip-comparison G__2284 registerDependency 109 -1 106 0)
-                                    (. ^:skip-comparison G__2284 registerDependency 110 -1 106 1)
-                                    (. ^:skip-comparison G__2284 registerDependency 107 0 109 -1)
-                                    (. ^:skip-comparison G__2284 registerDependency 107 1 110 -1)))
-    ))
 
 (deftest if-executes-context-with-env-args
   (is

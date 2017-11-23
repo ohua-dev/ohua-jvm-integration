@@ -44,18 +44,20 @@
 
 (defn mytrace [a & msgs] (apply println a msgs) a)
 
-(deftest embedded-let-run-test
-  "Conceptually the same as above but this time we execute it."
-  []
-  (def result-cond (long-array 10))
-  (ohua (let [prod (produceFn)]
-          (ohua.tests/collect (let [[one two] (balance prod 2 2)]
-                     (add (mytrace one "one") 100)
-                     (add (mytrace two "two" one) 3))
-                   result-cond)))
-    (test/is
-        (= (reduce + result-cond) (+ (reduce + (range 1 10 2)) 15)))
-  )
+
+; See Issue #17
+; (deftest embedded-let-run-test
+;   "Conceptually the same as above but this time we execute it."
+;   []
+;   (def result-cond (long-array 10))
+;   (ohua (let [prod (produceFn)]
+;           (ohua.tests/collect (let [[one two] (balance prod 2 2)]
+;                      (add (mytrace one "one") 100)
+;                      (add (mytrace two "two" one) 3))
+;                    result-cond)))
+;     (test/is
+;         (= (reduce + result-cond) (+ (reduce + (range 1 10 2)) 15)))
+;   )
 
 (deftest nested-let-compile-test
   "Tests the propagation of the let information."

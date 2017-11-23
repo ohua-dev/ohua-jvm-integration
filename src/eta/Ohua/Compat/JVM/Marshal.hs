@@ -33,6 +33,7 @@ import Data.Monoid ((<>))
 import qualified Data.Sequence as S
 import Data.Foldable (toList)
 import qualified Data.Map as M
+import Ohua.Monad
 
 instance Show Object where show = fromJString . toString
 
@@ -301,6 +302,32 @@ instance NativeConverter Algo where
     toNative (Algo code exprs) = newNAlgo (toNative code) (toJava $ toList exprs)
     fromNative o = Algo (fromNative $ nAlgoCode o) (S.fromList $ fromJava $ nAlgoEnvExprs o)
 
+
+instance NativeConverter LogLevel where
+    type NativeType LogLevel = Object
+    fromNative l 
+        | cljEq kwDebug l = LevelDebug
+        | cljEq kwInfo l = LevelInfo
+        | cljEq kwWarn l = LevelWarn
+        | cljEq kwError l = LevelError
+        | cljIsKw l = 
+            case cljNamespace l of
+                Nothing -> LevelOther $ cljName l
+                _ -> error "Expected non-namespaced keyword for logging level."
+        | otherwise = error "Unexpected type for logging level, expected keyword."
+    toNative LevelDebug = kwDebug
+    toNative LevelInfo = kwInfo
+    toNative LevelWarn = kwWarn
+    toNative LevelError = kwError
+    toNative (LevelOther l) = Clojure.keyword (T.unpack l)
+
+
+kwDebug, kwInfo, kwWarn, kwError :: Object
+kwDebug = Clojure.keyword "debug"
+kwInfo = Clojure.keyword "info"
+kwWarn = Clojure.keyword "warning"
+kwError = Clojure.keyword "error"
+
 asBool :: Object -> Bool
 asBool !o = (fromJava :: JBoolean -> Bool) . unsafeCast $ o
 
@@ -327,6 +354,12 @@ cljAsSeq = pureJavaWith (Clojure.coreVar "seq") . Clojure.invoke1
 
 cljVector :: Object -> Object
 cljVector = pureJavaWith (Clojure.coreVar "vec") . Clojure.invoke1
+
+cljEq :: Object -> Object -> Bool
+cljEq o1 o2 = asBool $ pureJavaWith (Clojure.coreVar "=") $ Clojure.invoke2 o1 o2
+
+cljIsKw :: Object -> Bool
+cljIsKw = asBool . pureJavaWith (Clojure.coreVar "keyword?") . Clojure.invoke1
 
 mkSym :: ClST.Symbol -> Object
 mkSym sym = pureJavaWith (Clojure.coreVar "symbol") $

@@ -47,19 +47,20 @@ cleanUnits (DFExpr lets ret) = pure $ DFExpr (fmap f lets) ret
     f e = e
 
 
-basicCompile :: IsLinker -> Object -> IO (OutGraph, Seq (Either (Unevaluated Object) (NLazy Object)))
-basicCompile linker thing = do
-    (graph, envExprs) <- runM $ do
-        forceLog "ST was valid" st
-        (alang, envExprs) <- toALang (mkRegistry linker) st
-        forceLog "alang converted" alang
-        liftIO $ print alang
-        -- liftIO $ writeFile "alang-dump" $ show alang
-        graph <- pipeline noCustomPasses {passAfterDFLowering = cleanUnits} alang
-        forceLog "graph created" graph
+basicCompile :: Object -> IsLinker -> Object -> IO (OutGraph, Seq (Either (Unevaluated Object) (NLazy Object)))
+basicCompile loggingLevel linker thing = 
+    runStderrLoggingT $ filterLogger (\_ l -> l >= fromNative loggingLevel) $ do
+        (graph, envExprs) <- runM $ do
+            forceLog "ST was valid" st
+            (alang, envExprs) <- toALang (mkRegistry linker) st
+            forceLog "alang converted" alang
+            logDebugN $ showT alang
+            -- liftIO $ writeFile "alang-dump" $ show alang
+            graph <- pipeline noCustomPasses {passAfterDFLowering = cleanUnits} alang
+            forceLog "graph created" graph
+            pure (graph, envExprs)
+        logDebugN $ asTable $ graph
         pure (graph, envExprs)
-    printAsTable $ graph
-    pure (graph, envExprs)
   where
     st = fromNative thing
     runM ac = fmap (either (error . T.unpack) id) $ runFromBindings opts ac (definedBindings st)
@@ -81,29 +82,29 @@ mkRegistry linker =
     stringToBinding = Binding . T.pack
 
 
-nativeCompile :: IsLinker -> Object -> IO (NativeType OutGraph)
-nativeCompile linker thing = toNative . fst <$> basicCompile linker thing
+nativeCompile :: Object -> IsLinker -> Object -> IO (NativeType OutGraph)
+nativeCompile loggingLevel linker thing = toNative . fst <$> basicCompile loggingLevel linker thing
 
 
-nativeCompileWSplice :: IsLinker -> Object -> IO (NGraph (NLazy Object))
-nativeCompileWSplice linker thing = do
-    (graph, envExprs0) <- basicCompile linker thing
+nativeCompileWSplice :: Object -> IsLinker -> Object -> IO (NGraph (NLazy Object))
+nativeCompileWSplice logLevel linker thing = do
+    (graph, envExprs0) <- basicCompile logLevel linker thing
     envExprs <- evalExprs linker envExprs0
     return $ toNative $ spliceEnv graph (Seq.index envExprs)
 
 
-nativeCompileAlgo :: IsLinker -> Object -> IO NAlgo
-nativeCompileAlgo linker thing = do
+nativeCompileAlgo :: Object -> IsLinker -> Object -> IO NAlgo
+nativeCompileAlgo logLevel linker thing = do
     (alang, envExprs) <- runM $ toALang (mkRegistry linker) st
     toNative . Algo alang <$> evalExprs linker envExprs
   where
     st = fromNative thing
-    runM ac = fmap (either (error . T.unpack) id) $ runFromBindings opts ac (definedBindings st)
+    runM ac = runStderrLoggingT $ filterLogger (\_ l -> l >= fromNative logLevel) $ fmap (either (error . T.unpack) id) $ runFromBindings opts ac (definedBindings st)
 
 
-nativeCompileWithoutEnvEval :: IsLinker -> Object -> IO (NGraph Object)
-nativeCompileWithoutEnvEval linker thing = do
-    (graph, envExprs) <- basicCompile linker thing
+nativeCompileWithoutEnvEval :: Object -> IsLinker -> Object -> IO (NGraph Object)
+nativeCompileWithoutEnvEval logLevel linker thing = do
+    (graph, envExprs) <- basicCompile logLevel linker thing
     return $ toNative $ spliceEnv graph (Seq.index $ fmap (either unwrapUnevaluated superCast) envExprs)
 
 
@@ -111,11 +112,11 @@ nativeCompileWithoutEnvEval linker thing = do
 -- nativeToAlang = either error (\(alang, objects) -> print alang >> print (toList objects)) . (\st -> runOhuaT0 (toALang st) (definedBindings st)) . fromNative
 
 
-foreign export java "@static ohua.Compiler.compile" nativeCompile :: IsLinker -> Object -> IO (NGraph JInteger)
+foreign export java "@static ohua.Compiler.compile" nativeCompile :: Object -> IsLinker -> Object -> IO (NGraph JInteger)
 
-foreign export java "@static ohua.Compiler.compileAndSpliceEnv" nativeCompileWSplice :: IsLinker -> Object -> IO (NGraph (NLazy Object))
+foreign export java "@static ohua.Compiler.compileAndSpliceEnv" nativeCompileWSplice :: Object -> IsLinker -> Object -> IO (NGraph (NLazy Object))
 
-foreign export java "@static ohua.Compiler.compileAlgo" nativeCompileAlgo :: IsLinker -> Object -> IO NAlgo
-foreign export java "@static ohua.Compiler.compileWithoutEnvEval" nativeCompileWithoutEnvEval :: IsLinker -> Object -> IO (NGraph Object)
+foreign export java "@static ohua.Compiler.compileAlgo" nativeCompileAlgo :: Object -> IsLinker -> Object -> IO NAlgo
+foreign export java "@static ohua.Compiler.compileWithoutEnvEval" nativeCompileWithoutEnvEval :: Object -> IsLinker -> Object -> IO (NGraph Object)
 
 -- foreign export java "@static ohua.Compiler.testToALang" nativeToAlang :: Object -> IO ()

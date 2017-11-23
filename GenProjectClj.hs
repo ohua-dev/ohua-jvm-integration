@@ -1,8 +1,5 @@
 {-
-When eta compiles the project it creates an executable (ohua-dummy-main) which is a shell script
-that contains (among other things) a listing of all dependency jar's for the ohua compiler.
-This script is used to read that script and extract the list of dependencies, extract their paths
-to a portable form.
+Uses the `etlas deps` command to retrieve the list of dependency jars for 
 Finally it reads the project.clj template and pastes the extracted jars as resources into the
 project.clj template at the marker location and prepends a notice that the file is generated
 -}
@@ -35,7 +32,7 @@ main = do
     deps <- T.intercalate " "
             . map (\t -> '"' `T.cons` t `T.snoc` '"')
             . init
-            . T.splitOn "\n"
+            . T.lines
             . T.pack
             <$> readCreateProcess (proc "etlas" ["deps", "--classpath", "lib:ohua-jvm-integration"]) ""
     template <- T.readFile templateFile
