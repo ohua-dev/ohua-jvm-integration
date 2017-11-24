@@ -78,6 +78,8 @@
 
 (defmacro ohua-require [& code] `(ohua.link/ohua-require ~@code))
 
+(defmacro defsfn [name init-expr & body]
+  `(defn ~(vary-meta name assoc :init-state `(quote ~init-expr)) ~@body))
 
 (defmacro ohua
   "See `ohua-fn`."

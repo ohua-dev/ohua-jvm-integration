@@ -6,7 +6,6 @@
 
 (def _100 (int 100))
 
-; Issue #10
 (deftest null-value-propagation
   "Making sure we do not drop null values. (In which case this test would deadlock.)"
   (test/is
