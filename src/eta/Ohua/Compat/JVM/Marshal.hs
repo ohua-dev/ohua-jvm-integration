@@ -37,6 +37,10 @@ import Ohua.Monad
 
 instance Show Object where show = fromJString . toString
 
+instance JavaConverter a a where
+    toJava = id
+    fromJava = id
+
 class Class (NativeType a) => NativeConverter a where
     type NativeType a
     fromNative :: NativeType a -> a
@@ -361,6 +365,15 @@ cljEq o1 o2 = asBool $ pureJavaWith (Clojure.coreVar "=") $ Clojure.invoke2 o1 o
 cljIsKw :: Object -> Bool
 cljIsKw = asBool . pureJavaWith (Clojure.coreVar "keyword?") . Clojure.invoke1
 
+cljMeta :: Object -> Object
+cljMeta = pureJavaWith (Clojure.coreVar "meta") . Clojure.invoke1
+
+cljGet :: Object -> Object -> Maybe Object 
+cljGet map key = maybeFromJava $ pureJavaWith (Clojure.coreVar "get") $ Clojure.invoke2 map key
+
+cljWithMeta :: Object -> Object -> Object
+cljWithMeta o meta = pureJavaWith (Clojure.coreVar "with-meta") $ Clojure.invoke2 o meta
+
 mkSym :: ClST.Symbol -> Object
 mkSym sym = pureJavaWith (Clojure.coreVar "symbol") $
     case sym of
@@ -368,21 +381,26 @@ mkSym sym = pureJavaWith (Clojure.coreVar "symbol") $
         Symbol (Just ns) name -> Clojure.invoke2 (convert ns) (convert name)
   where convert = superCast . (toNative :: T.Text -> JString)
 
-instance NativeConverter ST where
-    type NativeType ST = Object
-    fromNative obj | isSeq obj = Form asSeq
-                   | isSymbol obj = Sym $ Symbol (cljNamespace obj) (cljName obj)
-                   | isVector obj = Vec $ Vector asSeq
-                   | otherwise = Literal obj
+instance NativeConverter (AnnotatedST Object) where
+    type NativeType (AnnotatedST Object) = Object
+    fromNative obj = AnnotatedST $ Annotated (cljMeta obj) val
       where
+        val | isSeq obj = Form asSeq
+            | isSymbol obj = Sym $ Symbol (cljNamespace obj) (cljName obj)
+            | isVector obj = Vec $ Vector asSeq
+            | otherwise = Literal obj
         asSeq = map fromNative $ fromJava $ (unsafeCast :: Object -> Collection Object) obj
-    toNative (Form vals) = cljAsSeq $ (superCast :: Collection Object -> Object) $ toJava $ map toNative vals
-    toNative (Sym sym) = mkSym sym
-    toNative (Vec v) = cljVector $ (superCast :: Collection Object -> Object) $ toJava $ map toNative $ vectorToList v
-    toNative (Literal o) = o
+    toNative (AnnotatedST (Annotated meta st)) = cljWithMeta meta converted
+      where
+        converted = 
+            case st of
+                Form vals -> cljAsSeq $ (superCast :: Collection Object -> Object) $ toJava $ map toNative vals
+                Sym sym -> mkSym sym
+                Vec v -> cljVector $ (superCast :: Collection Object -> Object) $ toJava $ map toNative $ vectorToList v
+                Literal o -> o
 
 instance ToEnvExpr ClST.Symbol where
     toEnvExpr = mkSym
 
-instance ToEnvExpr Vector where
+instance (NativeConverter a, NativeType a ~ Object) => ToEnvExpr (Vector a) where
     toEnvExpr = cljVector . (superCast :: JObjectArray -> Object) . toJava . map toNative . vectorToList
