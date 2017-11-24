@@ -26,12 +26,14 @@ library
     -- , Ohua.IR.Transform.Pmap
     -- , Ohua.IR.Transform.DeadCodeElimination
       Clojure
+    , Clojure.Core
     , Ohua.Compat.JVM.Marshal
     , Ohua.Compat.JVM.ClojureST
     , Ohua.Compat.JVM.ToALang
     , Ohua.Compat.JVM.Compiler
 
-  -- other-modules:
+  other-modules:
+      Java.ConversionUtils
   -- other-extensions:
   build-depends:        
       base >=4.8 && <4.9

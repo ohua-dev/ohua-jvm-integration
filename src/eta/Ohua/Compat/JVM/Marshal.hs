@@ -14,6 +14,7 @@ This source code is licensed under the terms described in the associated LICENSE
 module Ohua.Compat.JVM.Marshal where
 
 import Java
+import qualified Java.ConversionUtils as ConversionUtils
 import Lens.Micro
 import Ohua.ALang.Lang
 import Ohua.IR
@@ -25,6 +26,7 @@ import Unsafe.Coerce
 import Ohua.DFGraph
 import Ohua.Compile
 import qualified Clojure
+import qualified Clojure.Core as Clojure
 import System.IO.Unsafe
 import System.IO
 import Ohua.Compat.JVM.ClojureST as ClST
@@ -35,11 +37,8 @@ import Data.Foldable (toList)
 import qualified Data.Map as M
 import Ohua.Monad
 
-instance Show Object where show = fromJString . toString
-
-instance JavaConverter a a where
-    toJava = id
-    fromJava = id
+instance Show Object where 
+    show = maybe "null" (fromJString . toString) . (maybeFromJava :: Object -> Maybe Object)
 
 class Class (NativeType a) => NativeConverter a where
     type NativeType a
@@ -49,7 +48,7 @@ class Class (NativeType a) => NativeConverter a where
 
 instance NativeConverter T.Text where
     type NativeType T.Text = JString
-    fromNative = T.pack . fromJava
+    fromNative = ConversionUtils.toText
     toNative = toJava . T.unpack
 
 
@@ -310,13 +309,13 @@ instance NativeConverter Algo where
 instance NativeConverter LogLevel where
     type NativeType LogLevel = Object
     fromNative l 
-        | cljEq kwDebug l = LevelDebug
-        | cljEq kwInfo l = LevelInfo
-        | cljEq kwWarn l = LevelWarn
-        | cljEq kwError l = LevelError
-        | cljIsKw l = 
-            case cljNamespace l of
-                Nothing -> LevelOther $ cljName l
+        | Clojure.eq kwDebug l = LevelDebug
+        | Clojure.eq kwInfo l = LevelInfo
+        | Clojure.eq kwWarn l = LevelWarn
+        | Clojure.eq kwError l = LevelError
+        | Clojure.isKw l = 
+            case Clojure.namespace l of
+                Nothing -> LevelOther $ Clojure.name l
                 _ -> error "Expected non-namespaced keyword for logging level."
         | otherwise = error "Unexpected type for logging level, expected keyword."
     toNative LevelDebug = kwDebug
@@ -332,48 +331,6 @@ kwInfo = Clojure.keyword "info"
 kwWarn = Clojure.keyword "warning"
 kwError = Clojure.keyword "error"
 
-asBool :: Object -> Bool
-asBool !o = (fromJava :: JBoolean -> Bool) . unsafeCast $ o
-
-asString :: Object -> T.Text
-asString = (fromNative :: JString -> T.Text) . unsafeCast
-
-isSeq :: Object -> Bool
-isSeq o = asBool $ pureJavaWith (Clojure.coreVar "seq?") $ Clojure.invoke1 o
-
-isSymbol :: Object -> Bool
-isSymbol = asBool . pureJavaWith (Clojure.coreVar "symbol?") . Clojure.invoke1
-
-isVector :: Object -> Bool
-isVector = asBool . pureJavaWith (Clojure.coreVar "vector?") . Clojure.invoke1
-
-cljName :: Object -> T.Text
-cljName = asString . pureJavaWith (Clojure.coreVar "name") . Clojure.invoke1
-
-cljNamespace :: Object -> Maybe T.Text
-cljNamespace = fmap T.pack . (maybeFromJava :: JString -> Maybe String) . unsafeCast . pureJavaWith (Clojure.coreVar "namespace") . Clojure.invoke1
-
-cljAsSeq :: Object -> Object
-cljAsSeq = pureJavaWith (Clojure.coreVar "seq") . Clojure.invoke1
-
-cljVector :: Object -> Object
-cljVector = pureJavaWith (Clojure.coreVar "vec") . Clojure.invoke1
-
-cljEq :: Object -> Object -> Bool
-cljEq o1 o2 = asBool $ pureJavaWith (Clojure.coreVar "=") $ Clojure.invoke2 o1 o2
-
-cljIsKw :: Object -> Bool
-cljIsKw = asBool . pureJavaWith (Clojure.coreVar "keyword?") . Clojure.invoke1
-
-cljMeta :: Object -> Object
-cljMeta = pureJavaWith (Clojure.coreVar "meta") . Clojure.invoke1
-
-cljGet :: Object -> Object -> Maybe Object 
-cljGet map key = maybeFromJava $ pureJavaWith (Clojure.coreVar "get") $ Clojure.invoke2 map key
-
-cljWithMeta :: Object -> Object -> Object
-cljWithMeta o meta = pureJavaWith (Clojure.coreVar "with-meta") $ Clojure.invoke2 o meta
-
 mkSym :: ClST.Symbol -> Object
 mkSym sym = pureJavaWith (Clojure.coreVar "symbol") $
     case sym of
@@ -383,24 +340,24 @@ mkSym sym = pureJavaWith (Clojure.coreVar "symbol") $
 
 instance NativeConverter (AnnotatedST Object) where
     type NativeType (AnnotatedST Object) = Object
-    fromNative obj = AnnotatedST $ Annotated (cljMeta obj) val
+    fromNative obj = AnnotatedST $ Annotated (Clojure.meta obj) val
       where
-        val | isSeq obj = Form asSeq
-            | isSymbol obj = Sym $ Symbol (cljNamespace obj) (cljName obj)
-            | isVector obj = Vec $ Vector asSeq
+        val | Clojure.isSeq obj = Form asSeq
+            | Clojure.isSymbol obj = Sym $ Symbol (Clojure.namespace obj) (Clojure.name obj)
+            | Clojure.isVector obj = Vec $ Vector asSeq
             | otherwise = Literal obj
         asSeq = map fromNative $ fromJava $ (unsafeCast :: Object -> Collection Object) obj
-    toNative (AnnotatedST (Annotated meta st)) = cljWithMeta meta converted
+    toNative (AnnotatedST (Annotated meta st)) = Clojure.withMeta meta converted
       where
         converted = 
             case st of
-                Form vals -> cljAsSeq $ (superCast :: Collection Object -> Object) $ toJava $ map toNative vals
+                Form vals -> Clojure.asSeq $ (superCast :: Collection Object -> Object) $ toJava $ map toNative vals
                 Sym sym -> mkSym sym
-                Vec v -> cljVector $ (superCast :: Collection Object -> Object) $ toJava $ map toNative $ vectorToList v
+                Vec v -> Clojure.vector $ (superCast :: Collection Object -> Object) $ toJava $ map toNative $ vectorToList v
                 Literal o -> o
 
 instance ToEnvExpr ClST.Symbol where
     toEnvExpr = mkSym
 
 instance (NativeConverter a, NativeType a ~ Object) => ToEnvExpr (Vector a) where
-    toEnvExpr = cljVector . (superCast :: JObjectArray -> Object) . toJava . map toNative . vectorToList
+    toEnvExpr = Clojure.vector . (superCast :: JObjectArray -> Object) . toJava . map toNative . vectorToList

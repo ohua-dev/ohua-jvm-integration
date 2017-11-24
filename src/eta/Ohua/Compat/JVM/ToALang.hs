@@ -4,6 +4,7 @@ module Ohua.Compat.JVM.ToALang where
 
 
 import qualified Clojure
+import qualified Clojure.Core as Clojure
 import           Control.Category          hiding (id, (.))
 import           Control.Monad.Except
 import           Control.Monad.RWS
@@ -148,7 +149,7 @@ initExprKw = Clojure.keyword "init-state"
 
 
 getCljSfnInitExpr :: HasAnnotation thing Object => thing -> Maybe Object
-getCljSfnInitExpr = cljGet initExprKw . (^. annotation)
+getCljSfnInitExpr = Clojure.get initExprKw . (^. annotation)
 
 
 expectUnqual :: MonadError Error m => ClST.Symbol -> m Binding
@@ -203,6 +204,18 @@ toALang reg st = do
     (a, s, ()) <- runRWST (toAlang' st) (noDeclaredSymbols, reg) (mempty, mempty)
     a' <- assignIds a
     pure (a', s ^. _1)
+
+
+logEnvValue :: (MonadError Error m, MonadState s m, Field1' s EnvExprs, MonadLogger m) 
+            => HostExpr -> m ()
+logEnvValue (HostExpr index) = do
+    o <- preuse (_1 . ix index)
+    exprObj <- case o of
+        Nothing -> throwError $ "Env expr with value " <> showT index <> " does not exist."
+        Just (Left (Unevaluated o)) -> pure o
+        Just (Right o) -> pure $ (superCast :: NLazy a -> Object) o
+    
+    logDebugN $ "Env expr [" <> showT index <> "]: " <> showT exprObj <> " : " <> showT (Clojure.type_ exprObj)
 
 
 toAlang' :: AnnotatedST Object -> ToALangM Expression
@@ -263,7 +276,7 @@ toAlang' stWithAnn = case stWithAnn ^. value of
                     `Apply` c
                     `Apply` Lambda "_" t
                     `Apply` Lambda "_" e
-    Form list -> do
+    Form list@(head:_) -> do
             (fn:rest) <- mapM toAlang' list
 
             -- I insert `unit` here as argument to functions with no arguments.
@@ -272,8 +285,12 @@ toAlang' stWithAnn = case stWithAnn ^. value of
             -- env args when not properly removed!
             -- Make sure to pay special attention to the unit value and its application again when
             -- coercing env args!
+            logDebugN $ "Meta info: " <> showT (head ^. annotation)
+            case fn of
+                (Var (Env e)) -> logEnvValue e
+                _ -> pure ()
             restWInit <-
-                case getCljSfnInitExpr stWithAnn of
+                case getCljSfnInitExpr head of
                     Nothing -> pure rest
                     Just o -> do
                         initExpr <- mkEnvExpr o
