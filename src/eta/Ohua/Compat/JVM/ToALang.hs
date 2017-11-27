@@ -24,7 +24,7 @@ import           Ohua.Compat.JVM.ClojureST as ClST
 import           Ohua.Compat.JVM.Marshal
 import           Ohua.DFLang.Lang          (DFVar (DFEnvVar))
 import           Ohua.LensClasses
-import           Ohua.Monad
+import           Ohua.Monad hiding (getEnvExpr)
 import           Ohua.Types
 import           Ohua.Util
 
@@ -148,8 +148,9 @@ initExprKw :: Object
 initExprKw = Clojure.keyword "init-state"
 
 
-getCljSfnInitExpr :: HasAnnotation thing Object => thing -> Maybe Object
-getCljSfnInitExpr = Clojure.get initExprKw . (^. annotation)
+getCljSfnInitExpr :: (MonadError Error m, MonadState s m, Field1' s EnvExprs) 
+                  => AnnotatedST Object -> m (Maybe Object)
+getCljSfnInitExpr st = pure $ Clojure.get (st ^. annotation) initExprKw
 
 
 expectUnqual :: MonadError Error m => ClST.Symbol -> m Binding
@@ -157,10 +158,10 @@ expectUnqual (Symbol Nothing name) = pure $ Binding name
 expectUnqual sym = failWith $ "Expected unqualified symbol, got " <> showT sym
 
 
-expectSym :: (HasValue thing (GenericST a), MonadError Error m) => thing -> m Binding
-expectSym wAnn = case wAnn ^. value of
+expectSym :: (HasValue thing (GenericST a), MonadError Error m, Show a) => T.Text -> thing -> m Binding
+expectSym location wAnn = case wAnn ^. value of
     Sym s -> pure $ symToBinding s
-    _     -> failWith "Expected symbol"
+    thing -> failWith $ "Expected symbol in " <> location <> ", found " <> showT thing
 
 
 mkLams :: (Applicative m, MonadGenBnd m) => [Assignment] -> m (Expr a -> Expr a)
@@ -168,11 +169,11 @@ mkLams []   = Lambda . Direct <$> generateBindingWith "_"
 mkLams more = pure $ foldl (.) id $ map Lambda more
 
 
-handleAssign :: (Applicative m, MonadError Error m)
+handleAssign :: (Applicative m, MonadError Error m, Show a)
              => AnnotatedST a -> m Assignment
 handleAssign wAnn = case wAnn ^. value of
     Sym s -> pure $ Direct $ symToBinding s
-    Vec v -> Destructure <$> traverse expectSym (vectorToList v)
+    Vec v -> Destructure <$> traverse (expectSym "assignment") (vectorToList v)
     _     -> failWith "Invalid type of assignment"
 
 
@@ -192,11 +193,17 @@ type ToALangM = RWST (DeclaredSymbols, Registry) () (EnvExprs, AlgoMap) (OhuaM O
 mkEnvExpr :: ToEnvExpr e => e -> ToALangM Expression
 mkEnvExpr = fmap (Var . Env) . mkEnvRef
 
+mkEnvRef :: (MonadState s m, Field1' s EnvExprs, ToEnvExpr e) => e -> m HostExpr
 mkEnvRef thing = do
     i <- S.length <$> use _1
     _1 %= (|> Left (Unevaluated $ toEnvExpr thing))
     pure $ HostExpr i
 
+getEnvExpr :: (MonadError Error m, MonadState s m, Field1' s EnvExprs) 
+           => HostExpr -> m (Either (Unevaluated Object) (NLazy Object))
+getEnvExpr (HostExpr index) = preuse (_1 . ix index) >>= maybe (throwError msg) pure
+  where 
+    msg = "Invariant broken, no env expression with index " <> showT index
 
 -- Discuss algos with no inputs with sebastian!
 toALang :: Registry -> AnnotatedST Object -> OhuaM Object (Expression, EnvExprs)
@@ -208,14 +215,13 @@ toALang reg st = do
 
 logEnvValue :: (MonadError Error m, MonadState s m, Field1' s EnvExprs, MonadLogger m) 
             => HostExpr -> m ()
-logEnvValue (HostExpr index) = do
-    o <- preuse (_1 . ix index)
+logEnvValue he = do
+    o <- getEnvExpr he
     exprObj <- case o of
-        Nothing -> throwError $ "Env expr with value " <> showT index <> " does not exist."
-        Just (Left (Unevaluated o)) -> pure o
-        Just (Right o) -> pure $ (superCast :: NLazy a -> Object) o
+        Left (Unevaluated o) -> pure o
+        Right o -> pure $ (superCast :: NLazy a -> Object) o
     
-    logDebugN $ "Env expr [" <> showT index <> "]: " <> showT exprObj <> " : " <> showT (Clojure.type_ exprObj)
+    logDebugN $ "Env expr [" <> showT he <> "]: " <> showT exprObj <> " : " <> showT (Clojure.type_ exprObj)
 
 
 toAlang' :: AnnotatedST Object -> ToALangM Expression
@@ -289,12 +295,11 @@ toAlang' stWithAnn = case stWithAnn ^. value of
             case fn of
                 (Var (Env e)) -> logEnvValue e
                 _ -> pure ()
-            restWInit <-
-                case getCljSfnInitExpr head of
-                    Nothing -> pure rest
-                    Just o -> do
-                        initExpr <- mkEnvExpr o
-                        pure $ initExpr : rest
+            restWInit <- getCljSfnInitExpr head >>= \case
+                Nothing -> pure rest
+                Just o -> do
+                    initExpr <- mkEnvExpr o
+                    pure $ initExpr : rest
 
             pure $ foldl' (\e v -> e `Apply` v) fn (insertUnitExpr restWInit)
       where
