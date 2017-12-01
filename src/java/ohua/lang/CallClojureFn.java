@@ -10,6 +10,7 @@ package ohua.lang;
 
 import clojure.java.api.Clojure;
 import clojure.lang.IFn;
+import java.util.Arrays;
 
 /**
  * Created by justusadam on 30/08/16.
@@ -19,6 +20,25 @@ public final class CallClojureFn {
 
     @defsfn
     public Object __callClojureFn(IFn function, Object... args) {
-        return apply_.invoke(function, args);
+        try {
+            return apply_.invoke(function, args);   
+        } catch (Throwable e) {
+            throw new ClojureCallException(function, args, e);
+        }
+    }
+
+    public final static class ClojureCallException extends RuntimeException {
+        private final IFn function;
+        private final Object[] arguments;
+        public ClojureCallException(IFn function, Object[] arguments, Throwable e) {
+            super(e);
+            this.function = function;
+            this.arguments = arguments;
+        }
+
+        @Override
+        public String getLocalizedMessage() {
+            return "Calling function " + function + " on " + Arrays.deepToString(arguments) + " caused " + super.getLocalizedMessage();
+        }
     }
 }
