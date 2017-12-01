@@ -67,13 +67,13 @@
     5))
 
 ; Not sure how this should be handeled ... but we can add it back once we have clojure function embedding
-; (deftest direct-access
-;  "accessing an output argument list via indexing."
-;  []
-;  (expect-op-arc-count
-;     (let [packet (accept "input")]
-;       (read (nth packet 0))
-;       (write (nth packet 1)))
-;       ; init stmt + 3 ops + 2 dependencies + 1 arg + compile stmt
-;    3
-;    3))
+(deftest direct-access
+ "accessing an output argument list via indexing."
+ []
+ (expect-op-arc-count
+    (let [packet (accept "input")]
+      (read (nth packet 0))
+      (write (nth packet 1)))
+      ; init stmt + 3 ops + 2 dependencies + 1 arg + compile stmt
+   3
+   3))

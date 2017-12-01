@@ -11,14 +11,14 @@
             [ohua.util :as util])
   (:use ohua.lang))
 
-(ohua :import [ohua.tests])
+(ohua-require [ohua.tests :refer :all])
 
 (deftest if-executes-context-with-env-args
   (is
     50
     (reduce + 0 (let [data (range 10)]
                   (<-ohua
-                    (smap (fn [n]
+                    (smap (algo [n]
                             (if (= 1 1)
                               (_const 5)
                               (_const nil)))
@@ -30,7 +30,7 @@
     50
     (reduce + 0 (let [data (range 10)]
                   (<-ohua
-                    (smap (fn [n]
+                    (smap (algo [n]
                             (if (= 1 1)
                               (const5)
                               (_const nil)))

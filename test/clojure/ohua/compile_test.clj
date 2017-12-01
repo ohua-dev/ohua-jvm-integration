@@ -112,18 +112,18 @@
     6))
 
 ; TODO See issue #11
-; (deftest arguments-outside
-;   "testing the detection of arguments"
-;   []
-;   (let [an-arg [1 2 3]
-;         type an-arg]
-;     (expect-op-arc-count
-;       (let [out-1 (accept "port01")
-;             out-2 (accept 9080)]
-;         (read out-1 out-2 an-arg))
-;       ; 3 ops + 2 arcs + 3 env arcs
-;       3
-;       5)))
+(deftest arguments-outside
+  "testing the detection of arguments"
+  []
+  (let [an-arg [1 2 3]
+        type an-arg]
+    (expect-op-arc-count
+      (let [out-1 (accept "port01")
+            out-2 (accept 9080)]
+        (read out-1 out-2 an-arg))
+      ; 3 ops + 2 arcs + 3 env arcs
+      3
+      5)))
 
 ; disabled, functions are currently not allowed as arguments. we may chose to trigger on `algo` instead which allows this again
 ; (deftest arguments-function
