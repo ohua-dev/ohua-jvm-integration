@@ -26,7 +26,7 @@
         (and
           (atom? val)
           (= 10 (deref val))))
-      {:logging :debug})))
+      )))
 
 (defsfn set-a (atom nil) [a new-val]
   (reset! a new-val)
@@ -41,4 +41,4 @@
         (and
           (atom? val)
           (= 10 (deref val))))
-      {:logging :debug})))
+      )))

@@ -57,7 +57,6 @@
    (ohua (let [prod (produce )
                consume-fn (clojure.core/partial local-consume prod)] 
       (apply consume-fn result)))
-   (println @result)
    (test/is (= @result 111)))
  )
 

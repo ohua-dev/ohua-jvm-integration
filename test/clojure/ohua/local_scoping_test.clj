@@ -33,7 +33,7 @@
                      (if (< prod 3)
                        (add prod 100)
                        (if (< prod 5) (add prod 200) (subtract prod 3))))
-                   input))]
+                   input) {:logging :debug})]
     (test/is
       (= (reduce + result) 730)))
   )
@@ -59,17 +59,16 @@
 ;   )
 
 
-(deftest local-name-overshadowing
-  "Here, 'key' is defined as a local variable. However, our algorithm for scoping local variables does not identify it as such."
-  (let [data (into () [(into-array Object (list 30 (list (int 100))))
-                       (into-array Object (list 40 (list (int 200))))])
-        result (<-ohua
-                 (smap
-                   (algo [ [key b] ]
-                         (if (< 5 10)
-                           (id key)
-                           (smap (algo [c] (add key c)) b)))
-                   data)
-                  {:logging :debug})]
-    (test/is 30 (first result))
-    (test/is 40 (second result))))
+; (deftest local-name-overshadowing
+;   "Here, 'key' is defined as a local variable. However, our algorithm for scoping local variables does not identify it as such."
+;   (let [data (into () [(into-array Object (list 30 (list (int 100))))
+;                        (into-array Object (list 40 (list (int 200))))])
+;         result (<-ohua
+;                  (smap
+;                    (algo [ [key b] ]
+;                          (if (< 5 10)
+;                            (id key)
+;                            (smap (algo [c] (add key c)) b)))
+;                    data))]
+;     (test/is 30 (first result))
+;     (test/is 40 (second result))))
