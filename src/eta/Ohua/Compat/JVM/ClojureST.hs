@@ -7,13 +7,13 @@ import           Data.Hashable
 import           Data.List        (intercalate)
 import           Data.Monoid
 import qualified Data.Sequence    as S
-import qualified Data.Text        as T
 import           Java
 import           Lens.Micro
 import           Ohua.ALang.Lang  (Expression)
 import           Ohua.LensClasses
 import           Ohua.Types
 import           Ohua.Util
+import qualified Ohua.Util.Str as Str
 
 
 data GenericST a
@@ -63,15 +63,15 @@ instance HasValue (AnnotatedST a) (GenericST (AnnotatedST a)) where
     value = intoAnn . value
 
 data Symbol = Symbol
-    { namespace :: Maybe T.Text
-    , name      :: T.Text
+    { namespace :: Maybe Str.Str
+    , name      :: Str.Str
     } deriving (Eq, Show)
 
 instance NFData Symbol where
     rnf (Symbol ns n) = ns `deepseq` n `deepseq` ()
 
-instance ShowT Symbol where
-    showT (Symbol ns name) = maybe "" (<> "/") ns <> name
+-- instance ShowT Symbol where
+--     showT (Symbol ns name) = T.pack $ Str.toString $ maybe "" (<> "/") ns <> name
 
 newtype Vector st = Vector { vectorToList :: [st] } deriving Eq
 

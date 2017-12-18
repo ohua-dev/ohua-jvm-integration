@@ -5,6 +5,7 @@ import Java
 import Clojure
 import Java.ConversionUtils
 import qualified Data.Text as T
+import qualified Ohua.Util.Str as Str
 
 
 isSeq :: Object -> Bool
@@ -16,11 +17,11 @@ isSymbol = asBool . pureJavaWith (Clojure.coreVar "symbol?") . Clojure.invoke1
 isVector :: Object -> Bool
 isVector = asBool . pureJavaWith (Clojure.coreVar "vector?") . Clojure.invoke1
 
-name :: Object -> T.Text
+name :: Object -> Str.Str
 name = asString . pureJavaWith (Clojure.coreVar "name") . Clojure.invoke1
 
-namespace :: Object -> Maybe T.Text
-namespace = fmap T.pack . (maybeFromJava :: JString -> Maybe String) . unsafeCast . pureJavaWith (Clojure.coreVar "namespace") . Clojure.invoke1
+namespace :: Object -> Maybe Str.Str
+namespace = fmap Str.fromString . (maybeFromJava :: JString -> Maybe String) . unsafeCast . pureJavaWith (Clojure.coreVar "namespace") . Clojure.invoke1
 
 asSeq :: Object -> Object
 asSeq = pureJavaWith (Clojure.coreVar "seq") . Clojure.invoke1

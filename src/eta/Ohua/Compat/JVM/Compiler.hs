@@ -9,7 +9,6 @@ import Ohua.Compat.JVM.ToALang
 import Ohua.Compat.JVM.Marshal
 import Data.Foldable
 import Ohua.Types
-import qualified Data.Text as T
 import Data.Functor.Identity
 import Ohua.DFGraph
 import Data.Sequence as Seq
@@ -22,7 +21,8 @@ import Ohua.DFGraph.Show
 import Ohua.DFLang.Lang
 import Data.Default
 import Lens.Micro
-
+import Java.ConversionUtils
+import qualified Ohua.Util.Str as Str
 
 
 data {-# CLASS "ohua.Compiler" #-} NCompiler = NCompiler (Object# NCompiler) deriving Class
@@ -63,8 +63,8 @@ basicCompile loggingLevel linker thing =
         pure (graph, envExprs)
   where
     st = fromNative thing
-    runM ac = fmap (either (error . T.unpack) id) $ runFromBindings opts ac (definedBindings st)
-
+    runM ac = fmap (either (error . Str.toString) id) $ runFromBindings opts ac (definedBindings st)
+    
 
 evalExprs :: IsLinker -> Seq (Either (Unevaluated Object) (NLazy Object)) -> IO (Seq (NLazy Object))
 evalExprs linker = mapM $ either (javaWith linker . linkerEval . unwrapUnevaluated) pure
@@ -78,8 +78,8 @@ mkRegistry linker =
   where
     withNativeLinker :: (Functor f, NativeConverter b) => (String -> Java IsLinker (f (NativeType b))) -> Binding -> f b
     withNativeLinker f = (fmap fromNative . pureJavaWith linker . f . bndToString)
-    bndToString = T.unpack . unBinding
-    stringToBinding = Binding . T.pack
+    bndToString = Str.toString . unBinding
+    stringToBinding = Binding . Str.fromString
 
 
 nativeCompile :: Object -> IsLinker -> Object -> IO (NativeType OutGraph)
@@ -99,7 +99,7 @@ nativeCompileAlgo logLevel linker thing = do
     toNative . Algo alang <$> evalExprs linker envExprs
   where
     st = fromNative thing
-    runM ac = runStderrLoggingT $ filterLogger (\_ l -> l >= fromNative logLevel) $ fmap (either (error . T.unpack) id) $ runFromBindings opts ac (definedBindings st)
+    runM ac = runStderrLoggingT $ filterLogger (\_ l -> l >= fromNative logLevel) $ fmap (either (error . Str.toString) id) $ runFromBindings opts ac (definedBindings st)
 
 
 nativeCompileWithoutEnvEval :: Object -> IsLinker -> Object -> IO (NGraph Object)

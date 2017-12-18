@@ -27,6 +27,7 @@ import           Ohua.LensClasses
 import           Ohua.Monad hiding (getEnvExpr)
 import           Ohua.Types
 import           Ohua.Util
+import qualified Ohua.Util.Str as Str
 
 
 
@@ -155,13 +156,13 @@ getCljSfnInitExpr st = pure $ Clojure.get (st ^. annotation) initExprKw
 
 expectUnqual :: MonadError Error m => ClST.Symbol -> m Binding
 expectUnqual (Symbol Nothing name) = pure $ Binding name
-expectUnqual sym = failWith $ "Expected unqualified symbol, got " <> showT sym
+expectUnqual sym = failWith $ "Expected unqualified symbol, got " <> Str.showS sym
 
 
-expectSym :: (HasValue thing (GenericST a), MonadError Error m, Show a) => T.Text -> thing -> m Binding
+expectSym :: (HasValue thing (GenericST a), MonadError Error m, Show a) => Str.Str -> thing -> m Binding
 expectSym location wAnn = case wAnn ^. value of
     Sym s -> pure $ symToBinding s
-    thing -> failWith $ "Expected symbol in " <> location <> ", found " <> showT thing
+    thing -> failWith $ "Expected symbol in " <> location <> ", found " <> Str.showS thing
 
 
 mkLams :: (Applicative m, MonadGenBnd m) => [Assignment] -> m (Expr a -> Expr a)
@@ -203,7 +204,7 @@ getEnvExpr :: (MonadError Error m, MonadState s m, Field1' s EnvExprs)
            => HostExpr -> m (Either (Unevaluated Object) (NLazy Object))
 getEnvExpr (HostExpr index) = preuse (_1 . ix index) >>= maybe (throwError msg) pure
   where 
-    msg = "Invariant broken, no env expression with index " <> showT index
+    msg = "Invariant broken, no env expression with index " <> Str.showS index
 
 -- Discuss algos with no inputs with sebastian!
 toALang :: Registry -> AnnotatedST Object -> OhuaM Object (Expression, EnvExprs)
@@ -236,7 +237,7 @@ toAlang' stWithAnn = case stWithAnn ^. value of
             msf <- isSf s
             malgo <- isAlgo s
             case (msf, malgo) of
-                (Just _, Just _) -> failWith $ "ambiguous reference" <> showT s
+                (Just _, Just _) -> failWith $ "ambiguous reference" <> Str.showS s
                 (Just sf, Nothing) -> pure $ Var $ Sf sf Nothing
                 (Nothing, Just algo) -> integrateAlgo s algo
                 (Nothing, Nothing) -> mkEnvExpr s
@@ -263,7 +264,7 @@ toAlang' stWithAnn = case stWithAnn ^. value of
                 (AnnotatedST (Annotated _ (Vec v))):statements -> do
                     assigns <- mapM handleAssign (vectorToList v)
                     ($) <$> mkLams assigns <*> registerBnds (assigns >>= flattenAssign) (handleStatements statements)
-                _ -> failWith $ "Exprected binding vector in algo form " <> showT (stWithAnn ^. value)
+                _ -> failWith $ "Exprected binding vector in algo form " <> Str.showS (stWithAnn ^. value)
         | isIfSym sym -> do
             (cond, then_, else_) <-
                 case rest of
@@ -273,7 +274,7 @@ toAlang' stWithAnn = case stWithAnn ^. value of
                         failWith $ "NOT SUPPORTED: If with only two arguments is not supported \
                                 \yet. See Issue #14."
                     [condition, then_, else_] -> pure (condition, then_, Just else_)
-                    _ -> failWith $ "Wrong number of arguments for `if`. Expected 3, got " <> showT (length rest)
+                    _ -> failWith $ "Wrong number of arguments for `if`. Expected 3, got " <> Str.showS (length rest)
             c <- toAlang' cond
             t <- toAlang' then_
             e <- maybe (pure $ error "IMPOSSIBLE") toAlang' else_
@@ -353,9 +354,9 @@ shiftEnvExprs offset = lrMapRefs $ \case
 
 bndToFnName :: MonadOhua env m => Binding -> m QualifiedBinding
 bndToFnName (Binding b) =
-    case symbolFromString b of
-        Left err -> failWith $ T.pack err
-        Right (Unqual _) -> failWith $ "Could not convert " <> showT b <> " to function name"
+    case symbolFromString $ Str.toString b of
+        Left err -> failWith $ Str.fromString err
+        Right (Unqual _) -> failWith $ "Could not convert " <> Str.showS b <> " to function name"
         Right (Qual fnName) -> return fnName
 
 

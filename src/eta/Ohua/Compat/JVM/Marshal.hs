@@ -14,10 +14,9 @@ This source code is licensed under the terms described in the associated LICENSE
 module Ohua.Compat.JVM.Marshal where
 
 import Java
-import qualified Java.ConversionUtils as ConversionUtils
+import Java.ConversionUtils
 import Lens.Micro
 import Ohua.ALang.Lang
-import Ohua.IR
 import Ohua.Types
 import Control.Arrow ((***))
 import qualified Data.HashMap.Strict as HM
@@ -36,20 +35,7 @@ import qualified Data.Sequence as S
 import Data.Foldable (toList)
 import qualified Data.Map as M
 import Ohua.Monad
-
-instance Show Object where 
-    show = maybe "null" (fromJString . toString) . (maybeFromJava :: Object -> Maybe Object)
-
-class Class (NativeType a) => NativeConverter a where
-    type NativeType a
-    fromNative :: NativeType a -> a
-    toNative :: a -> NativeType a
-
-
-instance NativeConverter T.Text where
-    type NativeType T.Text = JString
-    fromNative = ConversionUtils.toText
-    toNative = toJava . T.unpack
+import qualified Ohua.Util.Str as Str
 
 
 type CljExpr = Object
@@ -59,7 +45,7 @@ not_implemented = error "This function is not (yet) implemented"
 
 instance NativeConverter QualifiedBinding where
     type NativeType QualifiedBinding = JString
-    toNative (QualifiedBinding ns name) = toNative $ T.intercalate "." (map unBinding $ nsRefToList ns) <> "/" <> (unBinding name)
+    toNative (QualifiedBinding ns name) = toNative $ Str.toString $ Str.intercalate "." (map unBinding $ nsRefToList ns) <> "/" <> (unBinding name)
     fromNative = either error expectQual . symbolFromString . fromNative
       where
         expectQual (Qual q) = q
@@ -269,7 +255,7 @@ instance JArray (NArc a) (NArcArr a)
 instance NativeConverter FnId where
     type NativeType FnId = JInteger
     fromNative = FnId . fromJava
-    toNative = toJava . unIRFnId
+    toNative = toJava . unFnId
 
 instance NativeConverter HostExpr where
     type NativeType HostExpr = JInteger
@@ -315,7 +301,7 @@ instance NativeConverter LogLevel where
         | Clojure.eq kwError l = LevelError
         | Clojure.isKw l = 
             case Clojure.namespace l of
-                Nothing -> LevelOther $ Clojure.name l
+                Nothing -> LevelOther $ T.pack $ Str.toString $ Clojure.name l
                 _ -> error "Expected non-namespaced keyword for logging level."
         | otherwise = error "Unexpected type for logging level, expected keyword."
     toNative LevelDebug = kwDebug
@@ -336,7 +322,7 @@ mkSym sym = pureJavaWith (Clojure.coreVar "symbol") $
     case sym of
         Symbol Nothing name -> Clojure.invoke1 $ convert name
         Symbol (Just ns) name -> Clojure.invoke2 (convert ns) (convert name)
-  where convert = superCast . (toNative :: T.Text -> JString)
+  where convert = superCast . (toNative :: Str.Str -> JString)
 
 instance NativeConverter (AnnotatedST Object) where
     type NativeType (AnnotatedST Object) = Object
