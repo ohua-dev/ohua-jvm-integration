@@ -326,24 +326,22 @@ mkSym sym = pureJavaWith (Clojure.coreVar "symbol") $
 
 instance NativeConverter (AnnotatedST Object) where
     type NativeType (AnnotatedST Object) = Object
-    fromNative obj = AnnotatedST $ Annotated (Clojure.meta obj) val
+    fromNative obj = Annotated (Clojure.meta obj) val
       where
         val | Clojure.isSeq obj = Form asSeq
             | Clojure.isSymbol obj = Sym $ Symbol (Clojure.namespace obj) (Clojure.name obj)
-            | Clojure.isVector obj = Vec $ Vector asSeq
-            | otherwise = Literal obj
+            | Clojure.isVector obj = Vec asSeq
+            | otherwise = Lit obj
         asSeq = map fromNative $ fromJava $ (unsafeCast :: Object -> Collection Object) obj
-    toNative (AnnotatedST (Annotated meta st)) = Clojure.withMeta meta converted
+    toNative (Annotated meta st) = Clojure.withMeta meta converted
       where
         converted = 
             case st of
                 Form vals -> Clojure.asSeq $ (superCast :: Collection Object -> Object) $ toJava $ map toNative vals
                 Sym sym -> mkSym sym
-                Vec v -> Clojure.vector $ (superCast :: Collection Object -> Object) $ toJava $ map toNative $ vectorToList v
-                Literal o -> o
+                Vec v -> Clojure.vector $ (superCast :: Collection Object -> Object) $ toJava $ map toNative v
+                Lit o -> o
 
-instance ToEnvExpr ClST.Symbol where
-    toEnvExpr = mkSym
+instance ToEnvExpr (AnnotatedST Object) where
+    toEnvExpr = toNative
 
-instance (NativeConverter a, NativeType a ~ Object) => ToEnvExpr (Vector a) where
-    toEnvExpr = Clojure.vector . (superCast :: JObjectArray -> Object) . toJava . map toNative . vectorToList

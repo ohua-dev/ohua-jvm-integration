@@ -1,4 +1,4 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving, UndecidableInstances #-}
 module Ohua.Compat.JVM.ClojureST where
 
 
@@ -14,53 +14,52 @@ import           Ohua.LensClasses
 import           Ohua.Types
 import           Ohua.Util
 import qualified Ohua.Util.Str as Str
+import Data.Functor.Classes (Eq1(liftEq), eq1, Show1, showsPrec1)
+import Data.Functor.Identity
+import Data.Foldable (for_)
 
 
-data GenericST a
-    = Literal Object
-    | Form [a]
+data GenericST f
+    = Lit Object
+    | Form [f (GenericST f)]
     | Sym Symbol
-    | Vec (Vector a)
+    | Vec [f (GenericST f)]
 
-instance Show a => Show (GenericST a) where
-    show (Literal _)  = "Object"
-    show (Form exprs) = "(" <> intercalate " " (map show exprs) <> ")"
-    show (Sym s)      = show s
-    show (Vec v)      = show v
+instance Show1 a => Show (GenericST a) where
+    showsPrec _ (Lit _)  = showString "Object"
+    showsPrec p (Form exprs) = 
+        showString "(" .
+        (case exprs of
+            [] -> id
+            x:xs -> foldl (\f e -> f . showsPrec1 0 e . showString " " ) (showsPrec1 0 x) xs) .
+        showString ")"
+    showsPrec p (Sym s)      = showsPrec p s
+    showsPrec _ (Vec exprs)      =
+        showString "[" .
+        (case exprs of
+            [] -> id
+            x:xs -> foldl (\f e -> f . showsPrec1 0 e . showString " " ) (showsPrec1 0 x) xs) .
+        showString "]"
 
-instance NFData a => NFData (GenericST a) where
-    rnf (Literal o) = ()
+instance NFData (f (GenericST f)) => NFData (GenericST f) where
+    rnf (Lit o) = ()
     rnf (Form l)    = l `deepseq` ()
     rnf (Sym s)     = s `deepseq` ()
     rnf (Vec v)     = v `deepseq` ()
 
-instance Eq a => Eq (GenericST a) where
-    Form f1 == Form f2 = f1 == f2
+instance Eq1 a => Eq (GenericST a) where
+    Form f1 == Form f2 = liftEq eq1 f1 f2
     Sym s1 == Sym s2 = s1 == s2
-    Vec v1 == Vec v2 = v1 == v2
-    Literal l1 == Literal l2 = equals l1 l2
+    Vec v1 == Vec v2 = liftEq eq1 v1 v2
+    Lit l1 == Lit l2 = equals l1 l2
     _ == _ = False
 
 instance NFData Object where
     rnf _ = ()
 
-newtype ST = ST { stToGeneric :: GenericST ST } deriving (Show, Eq, NFData)
+newtype ST = ST { stToGeneric :: GenericST Identity } deriving (Show, Eq, NFData)
 
-newtype AnnotatedST a = AnnotatedST { unwrapAnnotatedST :: Annotated a (GenericST (AnnotatedST a)) } deriving (Show, Eq, NFData)
-
-intoAnn ::
-    Lens
-        (AnnotatedST a)
-        (AnnotatedST b)
-        (Annotated a (GenericST (AnnotatedST a)))
-        (Annotated b (GenericST (AnnotatedST b)))
-intoAnn f s = AnnotatedST <$> f (unwrapAnnotatedST s)
-
-instance HasAnnotation (AnnotatedST a) a where
-    annotation = intoAnn . annotation
-
-instance HasValue (AnnotatedST a) (GenericST (AnnotatedST a)) where
-    value = intoAnn . value
+type AnnotatedST a = Annotated a (GenericST (Annotated a))
 
 data Symbol = Symbol
     { namespace :: Maybe Str.Str
@@ -72,14 +71,6 @@ instance NFData Symbol where
 
 -- instance ShowT Symbol where
 --     showT (Symbol ns name) = T.pack $ Str.toString $ maybe "" (<> "/") ns <> name
-
-newtype Vector st = Vector { vectorToList :: [st] } deriving Eq
-
-instance Show st => Show (Vector st) where
-    show (Vector exprs) = "[" <> intercalate " " (map show exprs) <> "]"
-
-instance NFData st => NFData (Vector st) where
-    rnf (Vector v) = v `deepseq` ()
 
 instance Hashable Symbol where
     hashWithSalt s (Symbol ns n) = hashWithSalt s (ns, n)
