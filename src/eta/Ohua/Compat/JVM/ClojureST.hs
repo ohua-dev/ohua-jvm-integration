@@ -1,65 +1,99 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving, UndecidableInstances #-}
+{-# LANGUAGE DeriveFunctor              #-}
+{-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE PatternSynonyms            #-}
+{-# LANGUAGE UndecidableInstances       #-}
 module Ohua.Compat.JVM.ClojureST where
 
 
 import           Control.DeepSeq
+import           Data.Foldable         (for_)
+import           Data.Functor.Classes
+import           Data.Functor.Compose
+import           Data.Functor.Foldable
 import           Data.Hashable
-import           Data.List        (intercalate)
+import           Data.List             (intercalate)
 import           Data.Monoid
-import qualified Data.Sequence    as S
+import qualified Data.Sequence         as S
 import           Java
 import           Lens.Micro
-import           Ohua.ALang.Lang  (Expression)
+import           Ohua.ALang.Lang       (Expression)
 import           Ohua.LensClasses
 import           Ohua.Types
 import           Ohua.Util
-import qualified Ohua.Util.Str as Str
-import Data.Functor.Classes (Eq1(liftEq), eq1, Show1, showsPrec1)
-import Data.Functor.Identity
-import Data.Foldable (for_)
+import qualified Ohua.Util.Str         as Str
 
 
-data GenericST f
-    = Lit Object
-    | Form [f (GenericST f)]
-    | Sym Symbol
-    | Vec [f (GenericST f)]
+data Expr a
+    = Lit  Object
+    | Form [a]
+    | Sym  Symbol
+    | Vec  [a]
+    deriving (Eq, Functor)
 
-instance Show1 a => Show (GenericST a) where
-    showsPrec _ (Lit _)  = showString "Object"
-    showsPrec p (Form exprs) = 
-        showString "(" .
-        (case exprs of
-            [] -> id
-            x:xs -> foldl (\f e -> f . showsPrec1 0 e . showString " " ) (showsPrec1 0 x) xs) .
-        showString ")"
-    showsPrec p (Sym s)      = showsPrec p s
-    showsPrec _ (Vec exprs)      =
-        showString "[" .
-        (case exprs of
-            [] -> id
-            x:xs -> foldl (\f e -> f . showsPrec1 0 e . showString " " ) (showsPrec1 0 x) xs) .
-        showString "]"
+pattern AnnLit ann o  = Compose (Annotated ann (Lit o))
+pattern AnnForm ann f = Compose (Annotated ann (Form f))
+pattern AnnSym ann s  = Compose (Annotated ann (Sym s))
+pattern AnnVec ann v  = Compose (Annotated ann (Vec v))
 
-instance NFData (f (GenericST f)) => NFData (GenericST f) where
-    rnf (Lit o) = ()
-    rnf (Form l)    = l `deepseq` ()
-    rnf (Sym s)     = s `deepseq` ()
-    rnf (Vec v)     = v `deepseq` ()
+instance Show a => Show (Expr a) where
+  showsPrec _ (Lit _) = showString "Object"
+  showsPrec p (Form exprs) =
+    showString "(" .
+    (case exprs of
+       [] -> id
+       x:xs -> foldl (\f e -> f . showsPrec 0 e . showString " " ) (showsPrec 0 x) xs) .
+    showString ")"
+  showsPrec p (Sym s) = showsPrec p s
+  showsPrec _ (Vec exprs) =
+    showString "[" .
+    (case exprs of
+       [] -> id
+       x:xs -> foldl (\f e -> f . showsPrec 0 e . showString " " ) (showsPrec 0 x) xs) .
+    showString "]"
 
-instance Eq1 a => Eq (GenericST a) where
-    Form f1 == Form f2 = liftEq eq1 f1 f2
-    Sym s1 == Sym s2 = s1 == s2
-    Vec v1 == Vec v2 = liftEq eq1 v1 v2
-    Lit l1 == Lit l2 = equals l1 l2
-    _ == _ = False
+instance Show1 Expr where
+  liftShowsPrec showInner _ p = \case
+    Lit _ -> showString "Object"
+    Form exprs ->
+      showString "(" .
+      (case exprs of
+         [] -> id
+         x:xs -> foldl (\f e -> f . showInner 0 e . showString " " ) (showInner 0 x) xs) .
+      showString ")"
+    Sym s -> showsPrec p s
+    Vec exprs ->
+      showString "[" .
+      (case exprs of
+         [] -> id
+         x:xs -> foldl (\f e -> f . showInner 0 e . showString " " ) (showInner 0 x) xs) .
+      showString "]"
+
+
+instance NFData a => NFData (Expr a) where
+    rnf (Lit o)  = ()
+    rnf (Form l) = l `deepseq` ()
+    rnf (Sym s)  = s `deepseq` ()
+    rnf (Vec v)  = v `deepseq` ()
 
 instance NFData Object where
     rnf _ = ()
 
-newtype ST = ST { stToGeneric :: GenericST Identity } deriving (Show, Eq, NFData)
+type ST = Fix Expr
 
-type AnnotatedST a = Annotated a (GenericST (Annotated a))
+lit :: Object -> ST
+lit = Fix . Lit
+
+form :: [ST] -> ST
+form = Fix . Form
+
+sym :: Symbol -> ST
+sym = Fix . Sym
+
+vec :: [ST] -> ST
+vec = Fix . Vec
+
+type AnnST ann = Fix (Compose (Annotated ann) Expr)
 
 data Symbol = Symbol
     { namespace :: Maybe Str.Str

@@ -1,34 +1,45 @@
 {-# LANGUAGE ConstraintKinds       #-}
 {-# LANGUAGE DeriveFunctor         #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE LambdaCase            #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 module Ohua.Compat.JVM.ToALang where
 
 
 import qualified Clojure
-import qualified Clojure.Core              as Clojure
-import           Control.Category          hiding (id, (.))
+import qualified Clojure.Core                 as Clojure
+import           Control.Arrow                (first)
+import           Control.Category             hiding (id, (.))
+import           Control.Comonad
+import           Control.Comonad.Cofree
+import           Control.Comonad.Trans.Cofree (CofreeF, tailF)
 import           Control.Monad.Except
 import           Control.Monad.RWS
 import           Control.Monad.Writer
-import           Data.Foldable
-import           Data.Functor.Classes      (Show1)
-import qualified Data.HashMap.Strict       as HM
-import qualified Data.HashSet              as HS
-import           Data.Sequence             (Seq, (|>))
-import qualified Data.Sequence             as S
-import qualified Data.Text                 as T
+import           Data.Foldable                as F
+import           Data.Functor.Classes         (Show1)
+import           Data.Functor.Compose
+import           Data.Functor.Foldable
+import qualified Data.HashMap.Strict          as HM
+import qualified Data.HashSet                 as HS
+import           Data.Sequence                (Seq, (|>))
+import qualified Data.Sequence                as S
+import qualified Data.Text                    as T
 import           Java
 import           Lens.Micro
 import           Lens.Micro.Internal
 import           Lens.Micro.Mtl
-import           Ohua.ALang.Lang
-import           Ohua.Compat.JVM.ClojureST as ClST
+import           Ohua.ALang.Lang              as AL
+import qualified Ohua.ALang.Refs
+import           Ohua.Compat.JVM.ClojureST    as ClST
 import           Ohua.Compat.JVM.Marshal
-import           Ohua.DFLang.Lang          (DFVar (DFEnvVar))
+import           Ohua.DFLang.Lang             (DFVar (DFEnvVar))
 import           Ohua.LensClasses
-import           Ohua.Monad                hiding (getEnvExpr)
+import           Ohua.Monad                   hiding (getEnvExpr)
 import           Ohua.Types
+import           Ohua.Unit
 import           Ohua.Util
-import qualified Ohua.Util.Str             as Str
+import qualified Ohua.Util.Str                as Str
 
 
 
@@ -45,7 +56,7 @@ type Evaluator a b = Unevaluated a -> b
 createEvaluator :: (a -> b) -> Evaluator a b
 createEvaluator f = f . unwrapUnevaluated
 
-letSym, letStarSym, algoSym, fnSym, fnStarSym, ifSym :: ClST.Symbol
+letSym, letStarSym, algoSym, fnSym, fnStarSym, ifSym, qualAlgoSym :: ClST.Symbol
 
 isLetSym, isAlgoSym :: ClST.Symbol -> Bool
 
@@ -68,25 +79,8 @@ ifSym = Symbol Nothing "if"
 
 isIfSym = (== ifSym)
 
-
-unitHE :: HostExpr
-unitHE = HostExpr (-1)
-
-
-unitSym :: ResolvedSymbol
-unitSym = Env unitHE
-
-
-unitExpr :: AExpr s ResolvedSymbol
-unitExpr = Var unitSym
-
-
-dfVarUnit :: DFVar
-dfVarUnit = DFEnvVar unitHE
-
-
 ifFunc :: QualifiedBinding
-ifFunc = "ohua.lang/if"
+ifFunc = Ohua.ALang.Refs.ifThenElse
 
 data Registry = Registry
     { registryResolveSf   :: Binding -> Maybe QualifiedBinding
@@ -150,9 +144,8 @@ initExprKw :: Object
 initExprKw = Clojure.keyword "init-state"
 
 
-getCljSfnInitExpr :: (MonadError Error m, MonadState s m, Field1' s EnvExprs)
-                  => AnnotatedST Object -> m (Maybe Object)
-getCljSfnInitExpr st = pure $ Clojure.get (st ^. annotation) initExprKw
+getCljSfnInitExpr :: Annotated Object a -> Maybe Object
+getCljSfnInitExpr st = Clojure.get (st ^. annotation) initExprKw
 
 
 expectUnqual :: MonadError Error m => ClST.Symbol -> m Binding
@@ -160,23 +153,22 @@ expectUnqual (Symbol Nothing name) = pure $ Binding name
 expectUnqual sym = failWith $ "Expected unqualified symbol, got " <> Str.showS sym
 
 
-expectSym :: (HasValue thing (GenericST a), MonadError Error m, Show1 a) => Str.Str -> thing -> m Binding
-expectSym location wAnn = case wAnn ^. value of
-    Sym s -> pure $ symToBinding s
-    thing -> failWith $ "Expected symbol in " <> location <> ", found " <> Str.showS thing
+expectSym :: (MonadError Error m, Show a) => Str.Str -> ClST.Expr a -> m Binding
+expectSym _ (Sym s) = pure $ symToBinding s
+expectSym location thing = failWith $ "Expected symbol in " <> location <> ", found " <> Str.showS thing
 
 
-mkLams :: (Applicative m, MonadGenBnd m) => [Assignment] -> m (Expr a -> Expr a)
+mkLams :: (Applicative m, MonadGenBnd m) => [Assignment] -> m (AL.Expr a -> AL.Expr a)
 mkLams []   = Lambda . Direct <$> generateBindingWith "_"
 mkLams more = pure $ foldl (.) id $ map Lambda more
 
 
-handleAssign :: (Applicative m, MonadError Error m, Show a)
-             => AnnotatedST a -> m Assignment
-handleAssign wAnn = case wAnn ^. value of
-    Sym s -> pure $ Direct $ symToBinding s
-    Vec v -> Destructure <$> traverse (expectSym "assignment") v
-    _     -> failWith "Invalid type of assignment"
+handleAssign :: (Applicative m, MonadError Error m)
+             => ClST.ST -> m Assignment
+handleAssign = project >>> \case
+  Sym s -> pure $ Direct $ symToBinding s
+  Vec v -> Destructure <$> traverse (expectSym "assignment" . project) v
+  _     -> failWith "Invalid type of assignment"
 
 
 registerBnds :: (MonadReader e m, Field1' e DeclaredSymbols) => [Binding] -> m a -> m a
@@ -208,9 +200,9 @@ getEnvExpr (HostExpr index) = preuse (_1 . ix index) >>= maybe (throwError msg) 
     msg = "Invariant broken, no env expression with index " <> Str.showS index
 
 -- Discuss algos with no inputs with sebastian!
-toALang :: Registry -> AnnotatedST Object -> OhuaM Object (Expression, EnvExprs)
+toALang :: Registry -> AnnST Object -> OhuaM Object (Expression, EnvExprs)
 toALang reg st = do
-    (a, s, ()) <- runRWST (toAlang' st) (noDeclaredSymbols, reg) (mempty, mempty)
+    (a, s, ()) <- runRWST (histo toAlangWorker st) (noDeclaredSymbols, reg) (mempty, mempty)
     a' <- assignIds a
     pure (a', s ^. _1)
 
@@ -226,88 +218,105 @@ logEnvValue he = do
     logDebugN $ "Env expr [" <> showT he <> "]: " <> showT exprObj <> " : " <> showT (Clojure.type_ exprObj)
 
 
-toAlang' :: AnnotatedST Object -> ToALangM Expression
-toAlang' stWithAnn = case stWithAnn ^. value of
+filteri :: (Int -> Bool) -> [a] -> [a]
+filteri p = map snd . filter (p . fst) . zip [0..]
+
+
+toAlangWorker :: Base (AnnST Object) (Cofree (Base (AnnST Object)) (ToALangM Expression)) -> ToALangM Expression
+toAlangWorker stWithAnn@(Compose (Annotated ann val)) =
+  case val of
     Lit o -> mkEnvExpr o
     Sym s -> do
-        isLocal <- isDefined s
+      isLocal <- isDefined s
 
-        if isLocal then
-            Var . Local <$> expectUnqual s
+      if isLocal
+        then Var . Local <$> expectUnqual s
         else do
-            msf <- isSf s
-            malgo <- isAlgo s
-            case (msf, malgo) of
-                (Just _, Just _) -> failWith $ "ambiguous reference" <> Str.showS s
-                (Just sf, Nothing) -> pure $ Var $ Sf sf Nothing
-                (Nothing, Just algo) -> integrateAlgo s algo
-                (Nothing, Nothing) -> mkEnvExpr stWithAnn
-    Vec v -> mkEnvExpr stWithAnn
+          msf <- isSf s
+          malgo <- isAlgo s
+          case (msf, malgo) of
+            (Just _, Just _) -> failWith $ "ambiguous reference" <> Str.showS s
+            (Just sf, Nothing) -> pure $ Var $ Sf sf Nothing
+            (Nothing, Just algo) -> integrateAlgo s algo
+            (Nothing, Nothing) -> mkEnvExpr asST
+    Vec v -> mkEnvExpr asST
     Form [] -> failWith "Empty form"
-    Form (Annotated _ (Sym sym):rest)
-        | isLetSym sym -> do
-            when (sym == letStarSym) $
-                logWarnN "let should not be expanded to `let*`. This may cause compile failures. \
-                            \When macroexpanding use `ohua.util/macroexpand-all` instead."
-            case rest of
-                Annotated _ (Vec v):statements ->
-                    handleLet (handleStatements statements) (partition 2 v)
-                _ -> failWith "Expected binding vector"
-        -- NOTE: This assumes a form of `(algo [] ...)` (or `(fn [] ...)`) it currently does not handle
-        -- things like `(fn ([] ...))` perhaps we should ...
-        | isAlgoSym sym -> do
-            when (sym == fnSym || sym == fnStarSym) $
-                logWarnN "DEPRECATED: The use of `fn` is deprecated, use `algo` instead."
-            when (sym == fnStarSym) $
-                logWarnN "fn should not be expanded to fn*. This may cause compile failures. \
-                        \When macroexpanding use `ohua.util/macroexpand-all` instead."
-            case rest of
-                Annotated _ (Vec v):statements -> do
-                    assigns <- mapM handleAssign v
-                    ($) <$> mkLams assigns <*> registerBnds (assigns >>= flattenAssign) (handleStatements statements)
-                _ -> failWith $ "Exprected binding vector in algo form " <> Str.showS (stWithAnn ^. value)
-        | isIfSym sym -> do
-            (cond, then_, else_) <-
-                case rest of
+    Form (head:rest) ->
+      let values = map extract rest
+          trees = map unwrap rest
+          annHead@(Annotated headAnn headVal) = getCompose $ unwrap head
+      in
+        case headVal of
+          Sym sym
+            | isLetSym sym -> do
+                when (sym == letStarSym) $
+                  logWarnN "let should not be expanded to `let*`. This may cause compile failures. \
+                           \When macroexpanding use `ohua.util/macroexpand-all` instead."
+                case trees of
+                  AnnVec _ v:_ -> do
+                    let assigns = map (recast toST) $ filteri odd v
+                    assignedValues <- traverse extract $ filteri even v
+                    vs <- sequence $ tail values
+                    handleLet (handleStatements vs) $ zip assigns assignedValues
+                  _ -> failWith "Expected binding vector"
+              -- NOTE: This assumes a form of `(algo [] ...)` (or `(fn [] ...)`) it currently does not handle
+              -- things like `(fn ([] ...))` perhaps we should ...
+            | isAlgoSym sym -> do
+                when (sym == fnSym || sym == fnStarSym) $
+                  logWarnN "DEPRECATED: The use of `fn` is deprecated, use `algo` instead."
+                when (sym == fnStarSym) $
+                  logWarnN "fn should not be expanded to fn*. This may cause compile failures. \
+                           \When macroexpanding use `ohua.util/macroexpand-all` instead."
+                case trees of
+                  AnnVec _ v:_ -> do
+                    vs <- sequence $ tail values
+                    assigns <- traverse (handleAssign . recast toST) v
+                    ($) <$> mkLams assigns <*> registerBnds (assigns >>= flattenAssign) (handleStatements vs)
+                  _ -> failWith "Exprected binding vector in algo form"
+            | isIfSym sym -> do
+                (c, t, e) <-
+                  case values of
                     -- for support of no-else-statement
                     [condition, then_] ->
-                        -- pure (condition, then_, Nothing)
-                        failWith $ "NOT SUPPORTED: If with only two arguments is not supported \
-                                \yet. See Issue #14."
-                    [condition, then_, else_] -> pure (condition, then_, Just else_)
+                      -- pure (condition, then_, Nothing)
+                      failWith $ "NOT SUPPORTED: If with only two arguments is not supported \
+                                 \yet. See Issue #14."
+                    [condition, then_, else_] -> (,,) <$> condition <*> then_ <*> else_
                     _ -> failWith $ "Wrong number of arguments for `if`. Expected 3, got " <> Str.showS (length rest)
-            c <- toAlang' cond
-            t <- toAlang' then_
-            e <- maybe (pure $ error "IMPOSSIBLE") toAlang' else_
-            pure $
-                Var (Sf ifFunc Nothing)
+                pure $
+                  Var (Sf ifFunc Nothing)
                     `Apply` c
                     `Apply` Lambda "_" t
                     `Apply` Lambda "_" e
-    Form list@(head:_) -> do
-            (fn:rest) <- mapM toAlang' list
+          _ -> do
+            (fn:args) <- sequence values
 
-            -- I insert `unit` here as argument to functions with no arguments.
-            -- This is remvoed again after lowering to DFLang with `Ohua.Compat.JVM.cleanUnits`.
-            -- Be aware that the `unit` value itself is a hack and will break resolving
-            -- env args when not properly removed!
-            -- Make sure to pay special attention to the unit value and its application again when
-            -- coercing env args!
-            logDebugN $ "Meta info: " <> showT (head ^. annotation)
+             -- I insert `unit` here as argument to functions with no arguments.
+             -- This is removed again after lowering to DFLang with `Ohua.Compat.JVM.cleanUnits`.
+             -- Be aware that the `unit` value itself is a hack and will break resolving
+             -- env args when not properly removed!
+             -- Make sure to pay special attention to the unit value and its application again when
+             -- coercing env args!
+            logDebugN $ "Meta info: " <> showT headAnn
             case fn of
-                (Var (Env e)) -> logEnvValue e
-                _             -> pure ()
-            restWInit <- getCljSfnInitExpr head >>= \case
-                Nothing -> pure rest
-                Just o -> do
-                    initExpr <- mkEnvExpr o
-                    pure $ initExpr : rest
+              Var (Env e) -> logEnvValue e
+              _           -> pure ()
+            restWInit <- case getCljSfnInitExpr annHead of
+              Nothing -> pure args
+              Just o -> do
+                initExpr <- mkEnvExpr o
+                pure $ initExpr : args
 
             pure $ foldl' (\e v -> e `Apply` v) fn (insertUnitExpr restWInit)
-      where
-        insertUnitExpr [] = [unitExpr]
-        insertUnitExpr xs = xs
-
+            where
+              insertUnitExpr [] = [unitExpr]
+              insertUnitExpr xs = xs
+  where
+    asST = embed $ fmap (recast id) stWithAnn :: AnnST Object
+    recast :: (Recursive t1, Corecursive a1, Base t1 ~ CofreeF f1 a2)
+           => (f1 a1 -> Base a1 a1) -> t1 -> a1
+    recast f = cata (embed . f . tailF)
+    toST = (^. value) . getCompose
 -- getNullExpr = Var . Env <$> getNullRef
 
 -- getNullRef = use _3 >>= \case
@@ -318,60 +327,60 @@ toAlang' stWithAnn = case stWithAnn ^. value of
 --     Just he -> pure he
 
 
-handleLet :: ToALangM Expression -> [[AnnotatedST Object]] -> ToALangM Expression
-handleLet f = go'
-    where
-    go' [] = f
-    go' ([assign, val]:rest) = do
-        assign' <- handleAssign assign
-        registerAssign assign' $ Let assign' <$> toAlang' val <*> go' rest
-    go' _ = failWith "Expected two element sequence"
+handleLet :: ToALangM Expression -> [(ClST.ST, Expression)] -> ToALangM Expression
+handleLet f = cata $ \case
+  Nil -> f
+  Cons (assign, val) b -> do
+    assign' <- handleAssign assign
+    registerAssign assign' $ Let assign' val <$> b
 
 
-handleStatements :: [AnnotatedST Object] -> ToALangM Expression
-handleStatements [] = failWith "Expected at least one return form in"
-handleStatements [x] = toAlang' x
-handleStatements (stmt:rest) = (Let . Direct <$> generateBindingWith "_") <*> toAlang' stmt <*> handleStatements rest
+handleStatements :: [Expression] -> ToALangM Expression
+handleStatements = para $ \case
+  Nil -> failWith "Expected at least one return form"
+  Cons rest ([], _) -> pure rest
+  Cons stmt (_, rest) -> do
+    bnd <- generateBindingWith "_"
+    Let (Direct bnd) stmt <$> rest
 
 
 integrateAlgo :: ClST.Symbol -> Algo -> ToALangM Expression
 integrateAlgo aname (Algo code envExprs) = do
-    cached <- gets (^? _2 . ix aname)
-    case cached of
-        Just a -> pure a
-        Nothing -> do
-            i <- S.length <$> use _1
-            _1 %= (<> fmap Right envExprs)
-            let adjusted = shiftEnvExprs i code
-            _2 . at aname .= Just adjusted
-            pure adjusted
+  cached <- gets (^? _2 . ix aname)
+  case cached of
+    Just a -> pure a
+    Nothing -> do
+      i <- S.length <$> use _1
+      _1 %= (<> fmap Right envExprs)
+      let adjusted = shiftEnvExprs i code
+      _2 . at aname .= Just adjusted
+      pure adjusted
 
 
 shiftEnvExprs :: Int -> Expression -> Expression
 shiftEnvExprs offset = lrMapRefs $ \case
-    Env (HostExpr i) -> Env $ HostExpr $ i + offset
-    a -> a
+  Env (HostExpr i) -> Env $ HostExpr $ i + offset
+  a -> a
 
 
 bndToFnName :: MonadOhua env m => Binding -> m QualifiedBinding
 bndToFnName (Binding b) =
-    case symbolFromString $ Str.toString b of
-        Left err -> failWith $ Str.fromString err
-        Right (Unqual _) -> failWith $ "Could not convert " <> Str.showS b <> " to function name"
-        Right (Qual fnName) -> return fnName
+  case symbolFromString $ Str.toString b of
+    Left err -> failWith $ Str.fromString err
+    Right (Unqual _) -> failWith $ "Could not convert " <> Str.showS b <> " to function name"
+    Right (Qual fnName) -> return fnName
 
 
 symToBinding :: ClST.Symbol -> Binding
 symToBinding = Binding . \case
-    Symbol Nothing name -> name
-    Symbol (Just ns) name -> ns <> "/" <> name
+  Symbol Nothing name -> name
+  Symbol (Just ns) name -> ns <> "/" <> name
 
 
-definedBindings :: AnnotatedST a -> HS.HashSet Binding
-definedBindings = execWriter . go0
-  where
-    go0 = go . (^. value)
-    go (Sym s)      = tell $ HS.singleton $ symToBinding s
-    go (Form exprs) = mapM_ go0 exprs
-    go (Vec v)      = mapM_ go0 v
-    go _            = return ()
+definedBindings :: AnnST a -> HS.HashSet Binding
+definedBindings = cata $ \(Compose (Annotated _ val)) ->
+  case val of
+    Sym s   -> HS.singleton $ symToBinding s
+    Form fs -> F.fold fs
+    Vec v   -> F.fold v
+    _       -> mempty

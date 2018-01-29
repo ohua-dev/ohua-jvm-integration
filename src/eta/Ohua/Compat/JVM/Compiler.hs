@@ -2,27 +2,28 @@
 module Ohua.Compat.JVM.Compiler where
 
 
-import Java
-import Ohua.Compile
-import Ohua.Monad
-import Ohua.Compat.JVM.ToALang
-import Ohua.Compat.JVM.Marshal
-import Data.Foldable
-import Ohua.Types
-import Data.Functor.Identity
-import Ohua.DFGraph
-import Data.Sequence as Seq
-import Ohua.ALang.Lang
-import Control.DeepSeq
-import Ohua.Util
-import Ohua.Compat.JVM.ClojureST
-import qualified Ohua.Compat.JVM.Refs as JVMRefs
-import Ohua.DFGraph.Show
-import Ohua.DFLang.Lang
-import Data.Default
-import Lens.Micro
-import Java.ConversionUtils
-import qualified Ohua.Util.Str as Str
+import           Control.DeepSeq
+import           Data.Default
+import           Data.Foldable
+import           Data.Functor.Identity
+import           Data.Sequence             as Seq
+import           Java
+import           Java.ConversionUtils
+import           Lens.Micro
+import           Ohua.ALang.Lang
+import           Ohua.Compat.JVM.ClojureST
+import           Ohua.Compat.JVM.Marshal
+import qualified Ohua.Compat.JVM.Refs      as JVMRefs
+import           Ohua.Compat.JVM.ToALang
+import           Ohua.Compile
+import           Ohua.DFGraph
+import           Ohua.DFGraph.Show
+import           Ohua.DFLang.Lang
+import           Ohua.Monad
+import           Ohua.Types
+import           Ohua.Util
+import qualified Ohua.Util.Str             as Str
+import Ohua.Unit
 
 
 data {-# CLASS "ohua.Compiler" #-} NCompiler = NCompiler (Object# NCompiler) deriving Class
@@ -40,31 +41,24 @@ opts = def
 forceA :: (NFData a, Applicative m) => a -> m ()
 forceA = (`deepseq` pure ())
 
-cleanUnits :: Applicative m => DFExpr -> m DFExpr
-cleanUnits (DFExpr lets ret) = pure $ DFExpr (fmap f lets) ret
-  where
-    f e@(LetExpr{callArguments=[a]}) | a == dfVarUnit = e {callArguments = []}
-    f e = e
-
 
 basicCompile :: Object -> IsLinker -> Object -> IO (OutGraph, Seq (Either (Unevaluated Object) (NLazy Object)))
-basicCompile loggingLevel linker thing = 
-    runStderrLoggingT $ filterLogger (\_ l -> l >= fromNative loggingLevel) $ do
-        (graph, envExprs) <- runM $ do
-            forceLog "ST was valid" st
-            (alang, envExprs) <- toALang (mkRegistry linker) st
-            forceLog "alang converted" alang
-            logDebugN $ showT alang
+basicCompile loggingLevel linker thing =
+  runStderrLoggingT $ filterLogger (\_ l -> l >= fromNative loggingLevel) $ do
+    (graph, envExprs) <- runM $ do
+      (alang, envExprs) <- toALang (mkRegistry linker) st
+      forceLog "alang converted" alang
+      logDebugN $ showT alang
             -- liftIO $ writeFile "alang-dump" $ show alang
-            graph <- pipeline noCustomPasses {passAfterDFLowering = cleanUnits} alang
-            forceLog "graph created" graph
-            pure (graph, envExprs)
-        logDebugN $ asTable $ graph
-        pure (graph, envExprs)
+      graph <- pipeline noCustomPasses {passAfterDFLowering = cleanUnits} alang
+      forceLog "graph created" graph
+      pure (graph, envExprs)
+    logDebugN $ asTable $ graph
+    pure (graph, envExprs)
   where
     st = fromNative thing
     runM ac = fmap (either (error . Str.toString) id) $ runFromBindings opts ac (definedBindings st)
-    
+
 
 evalExprs :: IsLinker -> Seq (Either (Unevaluated Object) (NLazy Object)) -> IO (Seq (NLazy Object))
 evalExprs linker = mapM $ either (javaWith linker . linkerEval . unwrapUnevaluated) pure
@@ -90,7 +84,7 @@ nativeCompileWSplice :: Object -> IsLinker -> Object -> IO (NGraph (NLazy Object
 nativeCompileWSplice logLevel linker thing = do
     (graph, envExprs0) <- basicCompile logLevel linker thing
     envExprs <- evalExprs linker envExprs0
-    return $ toNative $ spliceEnv graph (Seq.index envExprs)
+    return $ toNative $ spliceEnv (Seq.index envExprs) graph
 
 
 nativeCompileAlgo :: Object -> IsLinker -> Object -> IO NAlgo
@@ -105,7 +99,7 @@ nativeCompileAlgo logLevel linker thing = do
 nativeCompileWithoutEnvEval :: Object -> IsLinker -> Object -> IO (NGraph Object)
 nativeCompileWithoutEnvEval logLevel linker thing = do
     (graph, envExprs) <- basicCompile logLevel linker thing
-    return $ toNative $ spliceEnv graph (Seq.index $ fmap (either unwrapUnevaluated superCast) envExprs)
+    return $ toNative $ spliceEnv (Seq.index $ fmap (either unwrapUnevaluated superCast) envExprs) graph
 
 
 -- nativeToAlang :: Object -> IO ()

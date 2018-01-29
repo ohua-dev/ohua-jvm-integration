@@ -10,7 +10,7 @@ Portability : POSIX
 This source code is licensed under the terms described in the associated LICENSE.TXT file.
 -}
 {-# LANGUAGE ExplicitForAll, ScopedTypeVariables, MagicHash, TypeOperators #-}
-{-# LANGUAGE TypeFamilies, DataKinds, BangPatterns #-}
+{-# LANGUAGE TypeFamilies, DataKinds, BangPatterns, MultiWayIf #-}
 module Ohua.Compat.JVM.Marshal where
 
 import Java
@@ -36,6 +36,8 @@ import Data.Foldable (toList)
 import qualified Data.Map as M
 import Ohua.Monad
 import qualified Ohua.Util.Str as Str
+import Data.Functor.Foldable
+import Data.Functor.Compose
 
 
 type CljExpr = Object
@@ -324,24 +326,25 @@ mkSym sym = pureJavaWith (Clojure.coreVar "symbol") $
         Symbol (Just ns) name -> Clojure.invoke2 (convert ns) (convert name)
   where convert = superCast . (toNative :: Str.Str -> JString)
 
-instance NativeConverter (AnnotatedST Object) where
-    type NativeType (AnnotatedST Object) = Object
-    fromNative obj = Annotated (Clojure.meta obj) val
-      where
-        val | Clojure.isSeq obj = Form asSeq
-            | Clojure.isSymbol obj = Sym $ Symbol (Clojure.namespace obj) (Clojure.name obj)
-            | Clojure.isVector obj = Vec asSeq
-            | otherwise = Lit obj
-        asSeq = map fromNative $ fromJava $ (unsafeCast :: Object -> Collection Object) obj
-    toNative (Annotated meta st) = Clojure.withMeta meta converted
-      where
-        converted = 
-            case st of
-                Form vals -> Clojure.asSeq $ (superCast :: Collection Object -> Object) $ toJava $ map toNative vals
-                Sym sym -> mkSym sym
-                Vec v -> Clojure.vector $ (superCast :: Collection Object -> Object) $ toJava $ map toNative v
-                Lit o -> o
+instance NativeConverter (AnnST Object) where
+    type NativeType (AnnST Object) = Object
+    fromNative = ana $ \obj -> 
+      let asSeq = fromJava $ (unsafeCast :: Object -> Collection Object) obj
+      in Compose
+         $ Annotated (Clojure.meta obj)
+         $ if | Clojure.isSeq obj -> Form asSeq
+              | Clojure.isSymbol obj -> Sym $ Symbol (Clojure.namespace obj) (Clojure.name obj)
+              | Clojure.isVector obj -> Vec asSeq
+              | otherwise -> Lit obj
+        
+    toNative = cata $ \(Compose (Annotated ann val)) ->
+      Clojure.withMeta ann
+        $ case val of
+            Form vals -> Clojure.asSeq $ (superCast :: Collection Object -> Object) $ toJava vals
+            Sym sym -> mkSym sym
+            Vec v -> Clojure.vector $ (superCast :: Collection Object -> Object) $ toJava v
+            Lit o -> o
 
-instance ToEnvExpr (AnnotatedST Object) where
+instance ToEnvExpr (AnnST Object) where
     toEnvExpr = toNative
 

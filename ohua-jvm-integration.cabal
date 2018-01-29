@@ -25,54 +25,59 @@ library
     --   Ohua.IR.Transform
     -- , Ohua.IR.Transform.Pmap
     -- , Ohua.IR.Transform.DeadCodeElimination
-      Clojure
-    , Clojure.Core
-    , Ohua.Compat.JVM.Marshal
-    , Ohua.Compat.JVM.ClojureST
-    , Ohua.Compat.JVM.ToALang
-    , Ohua.Compat.JVM.Compiler
+                        Clojure
+                      , Clojure.Core
+                      , Ohua.Compat.JVM.Marshal
+                      , Ohua.Compat.JVM.ClojureST
+                      , Ohua.Compat.JVM.ToALang
+                      , Ohua.Compat.JVM.Compiler
+                      , Data.Functor.Compose
 
   other-modules:
-      Java.ConversionUtils
+                Java.ConversionUtils
   -- other-extensions:
   build-depends:        
-      base >=4.8 && <4.9
-    , transformers >= 0.5.2.0 && <= 0.5.4.0
-    , microlens == 0.4.7.0
-    , microlens-mtl == 0.1.10.0
-    , unordered-containers >= 0.2.7.1 && <= 0.2.8.0
-    , mtl == 2.2.1
-    , hashable >= 1.2.4.0 && <= 1.2.6.0
-    , containers >= 0.5.8.1 && <= 0.5.9.1
+                        base >=4.8 && <4.9
+                      , transformers >= 0.5.2.0 && <= 0.5.4.0
+                      , microlens == 0.4.7.0
+                      , microlens-mtl == 0.1.10.0
+                      , unordered-containers >= 0.2.7.1 && <= 0.2.8.0
+                      , mtl == 2.2.1
+                      , hashable >= 1.2.4.0 && <= 1.2.6.0
+                      , containers >= 0.5.8.1 && <= 0.5.9.1
     -- , extra == 1.5.2
-    , monad-loops == 0.4.3
-    , deepseq >=1.4.2.0 && <=1.4.3.0
-    , text >= 1.2.2.1 && <= 1.2.2.2
-    , ohua-core
-    , data-default
+                      , monad-loops == 0.4.3
+                      , deepseq >=1.4.2.0 && <=1.4.3.0
+                      , text >= 1.2.2.1 && <= 1.2.2.2
+                      , ohua-core
+                      , data-default
+                      , recursion-schemes
+                      , free
+                      , comonad
+                      
   hs-source-dirs:      src/eta
   default-language:    Haskell2010
   java-sources:        
     -- It's better not to depend on class files as they are generated
     -- I'd hope at some point we can depend on the clojure source directly
-      resources/ohua-jvm-runtime-0.1-SNAPSHOT.jar,
-      src/java/ohua/alang/Assignment.java,
-      src/java/ohua/alang/ResolvedSymbol.java,
-      src/java/ohua/alang/Expr.java,
-      src/java/ohua/types/Binding.java,
-      src/java/ohua/types/FnName.java,
-      src/java/ohua/Algo.java,
-      src/java/ohua/Linker.java
+                       resources/ohua-jvm-runtime-0.1-SNAPSHOT.jar,
+                       src/java/ohua/alang/Assignment.java,
+                       src/java/ohua/alang/ResolvedSymbol.java,
+                       src/java/ohua/alang/Expr.java,
+                       src/java/ohua/types/Binding.java,
+                       src/java/ohua/types/FnName.java,
+                       src/java/ohua/Algo.java,
+                       src/java/ohua/Linker.java
   default-extensions:  
-      OverloadedStrings
-    , MultiParamTypeClasses
-    , FunctionalDependencies
-    , TypeFamilies
-    , FlexibleContexts
-    , FlexibleInstances
-    , TypeSynonymInstances
-    , LambdaCase
-    , TupleSections
+                       OverloadedStrings
+                     , MultiParamTypeClasses
+                     , FunctionalDependencies
+                     , TypeFamilies
+                     , FlexibleContexts
+                     , FlexibleInstances
+                     , TypeSynonymInstances
+                     , LambdaCase
+                     , TupleSections
   ghc-options: -optjavac "-source 1.8 -target 1.8"
   if flag(debug)
     cpp-options: -DDEBUG=1
@@ -82,26 +87,26 @@ library
 test-suite jvm-integration-tests
   main-is:             Spec.hs
   other-modules: 
-    ConversionTests
+                 ConversionTests
   hs-source-dirs:      test/eta
   default-language:    Haskell2010
   build-depends:       
-      base >=4.8 && <4.9
-    , hspec == 2.4.3
-    , QuickCheck >= 2.7.6 && <= 2.10.0.1
-    , directory >= 1.3.0.0 && <= 1.3.1.0
-    , ohua-core
-    , ohua-jvm-integration
-    , text
-    , vector
+                       base >=4.8 && <4.9
+                     , hspec == 2.4.3
+                     , QuickCheck >= 2.7.6 && <= 2.10.0.1
+                     , directory >= 1.3.0.0 && <= 1.3.1.0
+                     , ohua-core
+                     , ohua-jvm-integration
+                     , text
+                     , vector
   java-sources:
-    src/java/ohua/alang/Assignment.java,
-    src/java/ohua/alang/ResolvedSymbol.java,
-    src/java/ohua/alang/Expr.java,
-    src/java/ohua/types/Binding.java,
-    src/java/ohua/types/FnName.java,
-    src/java/ohua/Algo.java,
-    src/java/ohua/Linker.java
-
+               src/java/ohua/alang/Assignment.java,
+               src/java/ohua/alang/ResolvedSymbol.java,
+               src/java/ohua/alang/Expr.java,
+               src/java/ohua/types/Binding.java,
+               src/java/ohua/types/FnName.java,
+               src/java/ohua/Algo.java,
+               src/java/ohua/Linker.java
+               
   type:                exitcode-stdio-1.0
   default-extensions:  OverloadedStrings
