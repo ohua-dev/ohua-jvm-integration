@@ -1,4 +1,6 @@
+{-# LANGUAGE DeriveFoldable             #-}
 {-# LANGUAGE DeriveFunctor              #-}
+{-# LANGUAGE DeriveTraversable          #-}
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE PatternSynonyms            #-}
@@ -7,7 +9,7 @@ module Ohua.Compat.JVM.ClojureST where
 
 
 import           Control.DeepSeq
-import           Data.Foldable         (for_)
+import           Data.Foldable         (foldr', for_)
 import           Data.Functor.Classes
 import           Data.Functor.Compose
 import           Data.Functor.Foldable
@@ -24,19 +26,42 @@ import           Ohua.Util
 import qualified Ohua.Util.Str         as Str
 
 
-data Expr a
-    = Lit  Object
-    | Form [a]
-    | Sym  Symbol
-    | Vec  [a]
-    deriving (Eq, Functor)
+data ExprF a
+    = LitF  Object
+    | FormF [a]
+    | SymF  Symbol
+    | VecF  [a]
+    deriving (Eq, Functor, Traversable, Foldable)
 
-pattern AnnLit ann o  = Compose (Annotated ann (Lit o))
-pattern AnnForm ann f = Compose (Annotated ann (Form f))
-pattern AnnSym ann s  = Compose (Annotated ann (Sym s))
-pattern AnnVec ann v  = Compose (Annotated ann (Vec v))
+instance NFData a => NFData (ExprF a) where
+  rnf = foldr' deepseq ()
 
-instance Show a => Show (Expr a) where
+newtype ST = ST (ExprF ST)
+
+type instance Base ST = ExprF
+
+instance Recursive ST where
+  project (ST b) = b
+
+instance Corecursive ST where
+  embed = ST
+
+pattern Lit o = ST (LitF o)
+pattern Form l = ST (FormF l)
+pattern Sym s = ST (SymF s)
+pattern Vec v = ST (VecF v)
+
+pattern AnnLitF ann o = Compose (Annotated ann (LitF o))
+pattern AnnFormF ann f = Compose (Annotated ann (FormF f))
+pattern AnnSymF ann s = Compose (Annotated ann (SymF s))
+pattern AnnVecF ann v = Compose (Annotated ann (VecF v))
+
+pattern AnnLit ann o  = AnnST (AnnLitF ann o)
+pattern AnnForm ann f = AnnST (AnnFormF ann f)
+pattern AnnSym ann s  = AnnST (AnnSymF ann s)
+pattern AnnVec ann v  = AnnST (AnnVecF ann v)
+
+instance Show ST where
   showsPrec _ (Lit _) = showString "Object"
   showsPrec p (Form exprs) =
     showString "(" .
@@ -52,48 +77,40 @@ instance Show a => Show (Expr a) where
        x:xs -> foldl (\f e -> f . showsPrec 0 e . showString " " ) (showsPrec 0 x) xs) .
     showString "]"
 
-instance Show1 Expr where
-  liftShowsPrec showInner _ p = \case
-    Lit _ -> showString "Object"
-    Form exprs ->
-      showString "(" .
-      (case exprs of
-         [] -> id
-         x:xs -> foldl (\f e -> f . showInner 0 e . showString " " ) (showInner 0 x) xs) .
-      showString ")"
-    Sym s -> showsPrec p s
-    Vec exprs ->
-      showString "[" .
-      (case exprs of
-         [] -> id
-         x:xs -> foldl (\f e -> f . showInner 0 e . showString " " ) (showInner 0 x) xs) .
-      showString "]"
+instance Show a => Show (ExprF a) where
+  showsPrec _ (LitF _) = showString "Object"
+  showsPrec p (FormF exprs) =
+    showString "(" .
+    (case exprs of
+       [] -> id
+       x:xs -> foldl (\f e -> f . showsPrec 0 e . showString " " ) (showsPrec 0 x) xs) .
+    showString ")"
+  showsPrec p (SymF s) = showsPrec p s
+  showsPrec _ (VecF exprs) =
+    showString "[" .
+    (case exprs of
+       [] -> id
+       x:xs -> foldl (\f e -> f . showsPrec 0 e . showString " " ) (showsPrec 0 x) xs) .
+    showString "]"
 
 
-instance NFData a => NFData (Expr a) where
-    rnf (Lit o)  = ()
-    rnf (Form l) = l `deepseq` ()
-    rnf (Sym s)  = s `deepseq` ()
-    rnf (Vec v)  = v `deepseq` ()
+instance NFData ST where rnf (ST s) = rnf s
 
 instance NFData Object where
     rnf _ = ()
 
-type ST = Fix Expr
+newtype AnnST ann = AnnST (Compose (Annotated ann) ExprF (AnnST ann))
 
-lit :: Object -> ST
-lit = Fix . Lit
+instance NFData ann => NFData (AnnST ann) where
+  rnf (AnnST (Compose inner)) = rnf inner
 
-form :: [ST] -> ST
-form = Fix . Form
+type instance Base (AnnST ann) = Compose (Annotated ann) ExprF
 
-sym :: Symbol -> ST
-sym = Fix . Sym
+instance Recursive (AnnST ann) where
+  project (AnnST b) = b
 
-vec :: [ST] -> ST
-vec = Fix . Vec
-
-type AnnST ann = Fix (Compose (Annotated ann) Expr)
+instance Corecursive (AnnST ann) where
+  embed = AnnST
 
 data Symbol = Symbol
     { namespace :: Maybe Str.Str
