@@ -47,34 +47,49 @@ not_implemented = error "This function is not (yet) implemented"
 
 instance NativeConverter QualifiedBinding where
     type NativeType QualifiedBinding = JString
-    toNative (QualifiedBinding ns name) = toNative $ Str.toString $ Str.intercalate "." (map unBinding $ nsRefToList ns) <> "/" <> (unBinding name)
-    fromNative = either error expectQual . symbolFromString . fromNative
+    toNative (QualifiedBinding ns name) =
+        toNative $
+        Str.toString $
+        Str.intercalate "." (map unwrap $ unwrap ns) <> "/" <> (unwrap name)
+    fromNative =
+        either (error . Str.toString) expectQual . symbolFromString . fromNative
       where
         expectQual (Qual q) = q
         expectQual s = error $ "Expected qualified binding, got " ++ show s
 
-data {-# CLASS "ohua.alang.Expr" #-} NExpr = NExpr (Object# NExpr) deriving (Class)
+data NExpr = NExpr @ohua.alang.Expr deriving Class
 
 instance NativeConverter Expression where
     type NativeType Expression = NExpr
     fromNative nexpr =
-        case (safeDowncast nexpr, safeDowncast nexpr, safeDowncast nexpr, safeDowncast nexpr) of
+        case ( safeDowncast nexpr
+             , safeDowncast nexpr
+             , safeDowncast nexpr
+             , safeDowncast nexpr) of
             (Just v, _, _, _) -> Var (fromNative $ nVarExprValue v)
             (_, Just lam, _, _) ->
-                Lambda (fromNative $ nLambdaExprAssignment lam) (fromNative $ nLambdaExprBody lam)
+                Lambda
+                    (fromNative $ nLambdaExprAssignment lam)
+                    (fromNative $ nLambdaExprBody lam)
             (_, _, Just app, _) ->
-                Apply (fromNative $ nApplyExprFunction app) (fromNative $ nApplyExprArgument app)
+                Apply
+                    (fromNative $ nApplyExprFunction app)
+                    (fromNative $ nApplyExprArgument app)
             (_, _, _, Just let_) ->
-                Let (fromNative $ nLetExprAssignment let_)
+                Let
+                    (fromNative $ nLetExprAssignment let_)
                     (fromNative $ nLetExprValue let_)
                     (fromNative $ nLetExprBody let_)
             _ -> error $ "unconvertable " ++ fromJava (toString nexpr)
-    toNative (Let bnd val body) = superCast $ newLetExpr (toNative bnd) (toNative val) (toNative body)
-    toNative (Lambda assign body) = superCast $ newLambdaExpr (toNative assign) (toNative body)
-    toNative (Apply assign body) = superCast $ newApplyExpr (toNative assign) (toNative body)
+    toNative (Let bnd val body) =
+        superCast $ newLetExpr (toNative bnd) (toNative val) (toNative body)
+    toNative (Lambda assign body) =
+        superCast $ newLambdaExpr (toNative assign) (toNative body)
+    toNative (Apply assign body) =
+        superCast $ newApplyExpr (toNative assign) (toNative body)
     toNative (Var v) = superCast $ newVarExpr $ toNative v
 
-data {-# CLASS "ohua.alang.Expr$Let" #-} NLetExpr = NLetExpr (Object# NLetExpr) deriving (Class)
+data NLetExpr = NLetExpr @ohua.alang.Expr$Let deriving Class
 type instance Inherits NLetExpr = '[NExpr]
 
 foreign import java "@field assignment" nLetExprAssignment :: NLetExpr -> NAssignment
@@ -82,34 +97,34 @@ foreign import java "@field value" nLetExprValue :: NLetExpr -> NExpr
 foreign import java "@field body" nLetExprBody :: NLetExpr -> NExpr
 foreign import java "@new" newLetExpr :: NAssignment -> NExpr -> NExpr -> NLetExpr
 
-data {-# CLASS "ohua.alang.Expr$Apply" #-} NApplyExpr = NApplyExpr (Object# NApplyExpr) deriving (Class)
+data NApplyExpr = NApplyExpr @ohua.alang.Expr$Apply deriving Class
 type instance Inherits NApplyExpr = '[NExpr]
 
 foreign import java "@field function" nApplyExprFunction :: NApplyExpr -> NExpr
 foreign import java "@field argument" nApplyExprArgument :: NApplyExpr -> NExpr
 foreign import java "@new" newApplyExpr :: NExpr -> NExpr -> NApplyExpr
 
-data {-# CLASS "ohua.alang.Expr$Var" #-} NVarExpr = NVarExpr (Object# NVarExpr) deriving (Class)
+data NVarExpr = NVarExpr @ohua.alang.Expr$Var deriving Class
 type instance Inherits NVarExpr = '[NExpr]
 
 foreign import java "@field value" nVarExprValue :: NVarExpr -> NResolvedSymbol
 foreign import java "@new" newVarExpr :: NResolvedSymbol -> NVarExpr
 
-data {-# CLASS "ohua.alang.Expr$Lambda" #-} NLambdaExpr = NLambdaExpr (Object# NLambdaExpr) deriving (Class)
+data NLambdaExpr = NLambdaExpr @ohua.alang.Expr$Lambda deriving Class
 type instance Inherits NLambdaExpr = '[NExpr]
 
 foreign import java "@field assignment" nLambdaExprAssignment :: NLambdaExpr -> NAssignment
 foreign import java "@field body" nLambdaExprBody :: NLambdaExpr -> NExpr
 foreign import java "@new" newLambdaExpr :: NAssignment -> NExpr -> NLambdaExpr
 
-data {-# CLASS "ohua.alang.Assignment" #-} NAssignment = NAssignment (Object# NAssignment) deriving (Class)
-data {-# CLASS "ohua.alang.Assignment$Direct" #-} NDirectAssignment = NDirectAssignment (Object# NDirectAssignment) deriving (Class)
+data NAssignment = NAssignment @ohua.alang.Assignment deriving (Class)
+data NDirectAssignment = NDirectAssignment @ohua.alang.Assignment$Direct deriving (Class)
 type instance Inherits NDirectAssignment = '[NAssignment]
 
 foreign import java "@field binding" nDirectAssignmentBinding :: NDirectAssignment -> NBinding
 foreign import java "@new" newDirectAssignment :: NBinding -> NDirectAssignment
 
-data {-# CLASS "ohua.alang.Assignment$Destructure" #-} NDestructureAssignment = NDestructureAssignment (Object# NDestructureAssignment) deriving (Class)
+data NDestructureAssignment = NDestructureAssignment @ohua.alang.Assignment$Destructure deriving (Class)
 type instance Inherits NDestructureAssignment = '[NAssignment]
 
 foreign import java "@field bindings" nDestructureAssignmentBindings :: NDestructureAssignment -> NBindingArr
@@ -121,40 +136,52 @@ instance NativeConverter Assignment where
     fromNative assign =
         case (safeDowncast assign, safeDowncast assign) of
             (Just dir, _) -> Direct $ fromNative $ nDirectAssignmentBinding dir
-            (_, Just destr) -> Destructure $ map fromNative $ fromJava (nDestructureAssignmentBindings destr :: NBindingArr)
+            (_, Just destr) ->
+                Destructure $
+                map fromNative $
+                fromJava (nDestructureAssignmentBindings destr :: NBindingArr)
             _ -> error $ "unconvertable " ++ fromJava (toString assign)
     toNative (Direct bnd) = superCast $ newDirectAssignment $ toNative bnd
-    toNative (Destructure bnds) = superCast $ newDestructureAssignment $ toJava $ map toNative bnds
+    toNative (Destructure bnds) =
+        superCast $ newDestructureAssignment $ toJava $ map toNative bnds
 
 
-data {-# CLASS "ohua.types.Binding" #-} NBinding = NBinding (Object# NBinding) deriving (Class)
+data NBinding = NBinding @ohua.types.Binding deriving (Class)
 
 instance NativeConverter Binding where
     type NativeType Binding = NBinding
-    fromNative nbind = Binding (fromNative $ nBindingValue nbind)
-    toNative (Binding str) = mkNBinding $ toNative str
+    fromNative = makeThrow . fromNative . nBindingValue
+    toNative = mkNBinding . toNative . unwrap
 
 foreign import java "@field value" nBindingValue :: NBinding -> JString
 foreign import java "@static ohua.types.Binding.mk" mkNBinding :: JString -> NBinding
 
-data {-# CLASS "ohua.types.Binding[]" #-} NBindingArr = NBindingArr (Object# NBindingArr) deriving (Class)
+data NBindingArr = NBindingArr @ohua.types.Binding[] deriving (Class)
 
 instance JArray NBinding NBindingArr
 
-data {-# CLASS "ohua.alang.ResolvedSymbol" #-} NResolvedSymbol = NResolvedSymbol (Object# NResolvedSymbol) deriving Class
+data NResolvedSymbol = NResolvedSymbol @ohua.alang.ResolvedSymbol deriving Class
 
 instance NativeConverter ResolvedSymbol where
     type NativeType ResolvedSymbol = NResolvedSymbol
-
     fromNative nsym =
         case (safeDowncast nsym, safeDowncast nsym, safeDowncast nsym) of
             (Just v, _, _) -> Local $ fromNative $ nLocalBindingBinding v
-            (_, Just v, _) -> Sf (fromNative $ nSfBindingFnName v) (fmap fromNative $ nSfBindingId v)
+            (_, Just v, _) ->
+                Sf
+                    (fromNative $ nSfBindingFnName v)
+                    (fmap fromNative $ nSfBindingId v)
             (_, _, Just v) -> Env $ fromNative $ nEnvBindingId v
             _ -> error "unconvertable"
     toNative (Local l) = superCast $ newLocalBinding $ toNative l
-    toNative (Sf name num) = superCast $ maybe newSFBinding1 (flip newSFBinding) (fmap (toJava . unFnId) num) (toNative name)
-    toNative (Env n) = superCast $ newEnvBinding $ toJava $ unwrapHostExpr n
+    toNative (Sf name num) =
+        superCast $
+        maybe
+            newSFBinding1
+            (flip newSFBinding)
+            (fmap (toJava . unwrap) num)
+            (toNative name)
+    toNative (Env n) = superCast $ newEnvBinding $ toJava $ unwrap n
 
 data {-# CLASS "ohua.alang.ResolvedSymbol$Local" #-} NLocalBinding = NLocalBinding (Object# NLocalBinding) deriving Class
 
@@ -195,7 +222,8 @@ data {-# CLASS "ohua.graph.Graph" #-} NGraph envExpr = NGraph (Object# (NGraph e
 
 instance NativeConverter a => NativeConverter (AbstractOutGraph a) where
     type NativeType (AbstractOutGraph a) = NGraph (NativeType a)
-    toNative (OutGraph ops arcs) = newNGraph (toJava $ map toNative ops) (toJava $ map toNative arcs)
+    toNative (OutGraph ops arcs _) =
+        newNGraph (toJava $ map toNative ops) (toJava $ map toNative arcs)
     fromNative = not_implemented
 
 foreign import java "@new" newNGraph :: NOperatorArr -> NArcArr a -> NGraph a
@@ -256,13 +284,13 @@ instance JArray (NArc a) (NArcArr a)
 
 instance NativeConverter FnId where
     type NativeType FnId = JInteger
-    fromNative = FnId . fromJava
-    toNative = toJava . unFnId
+    fromNative = makeThrow . fromJava
+    toNative = toJava . unwrap
 
 instance NativeConverter HostExpr where
     type NativeType HostExpr = JInteger
-    fromNative = HostExpr . fromJava
-    toNative = toJava . unwrapHostExpr
+    fromNative = makeThrow . fromJava
+    toNative = toJava . unwrap
 
 instance NativeConverter Object where
     type NativeType Object = Object
@@ -290,22 +318,27 @@ foreign import java "@field envExprs" nAlgoEnvExprs :: NAlgo -> NLazyArray Objec
 
 instance NativeConverter Algo where
     type NativeType Algo = NAlgo
-    toNative (Algo code exprs) = newNAlgo (toNative code) (toJava $ toList exprs)
-    fromNative o = Algo (fromNative $ nAlgoCode o) (S.fromList $ fromJava $ nAlgoEnvExprs o)
+    toNative (Algo code exprs) =
+        newNAlgo (toNative code) (toJava $ toList exprs)
+    fromNative o =
+        Algo
+            (fromNative $ nAlgoCode o)
+            (S.fromList $ fromJava $ nAlgoEnvExprs o)
 
 
 instance NativeConverter LogLevel where
     type NativeType LogLevel = Object
-    fromNative l 
+    fromNative l
         | Clojure.eq kwDebug l = LevelDebug
         | Clojure.eq kwInfo l = LevelInfo
         | Clojure.eq kwWarn l = LevelWarn
         | Clojure.eq kwError l = LevelError
-        | Clojure.isKw l = 
+        | Clojure.isKw l =
             case Clojure.namespace l of
                 Nothing -> LevelOther $ T.pack $ Str.toString $ Clojure.name l
                 _ -> error "Expected non-namespaced keyword for logging level."
-        | otherwise = error "Unexpected type for logging level, expected keyword."
+        | otherwise =
+            error "Unexpected type for logging level, expected keyword."
     toNative LevelDebug = kwDebug
     toNative LevelInfo = kwInfo
     toNative LevelWarn = kwWarn
@@ -320,31 +353,40 @@ kwWarn = Clojure.keyword "warning"
 kwError = Clojure.keyword "error"
 
 mkSym :: ClST.Symbol -> Object
-mkSym sym = pureJavaWith (Clojure.coreVar "symbol") $
+mkSym sym =
+    unsafePerformJavaWith (Clojure.coreVar "symbol") $
     case sym of
         Symbol Nothing name -> Clojure.invoke1 $ convert name
         Symbol (Just ns) name -> Clojure.invoke2 (convert ns) (convert name)
-  where convert = superCast . (toNative :: Str.Str -> JString)
+  where
+    convert = superCast . (toNative :: Str.Str -> JString)
 
-instance NativeConverter (AnnST Object) where
-    type NativeType (AnnST Object) = Object
-    fromNative = ana $ \obj -> 
-      let asSeq = fromJava $ (unsafeCast :: Object -> Collection Object) obj
-      in Compose
-         $ Annotated (Clojure.meta obj)
-         $ if | Clojure.isSeq obj -> Form asSeq
-              | Clojure.isSymbol obj -> Sym $ Symbol (Clojure.namespace obj) (Clojure.name obj)
-              | Clojure.isVector obj -> Vec asSeq
-              | otherwise -> Lit obj
-        
-    toNative = cata $ \(Compose (Annotated ann val)) ->
-      Clojure.withMeta ann
-        $ case val of
-            Form vals -> Clojure.asSeq $ (superCast :: Collection Object -> Object) $ toJava vals
-            Sym sym -> mkSym sym
-            Vec v -> Clojure.vector $ (superCast :: Collection Object -> Object) $ toJava v
-            Lit o -> o
+instance NativeConverter (AnnST Clojure.Meta) where
+    type NativeType (AnnST Clojure.Meta) = Object
+    fromNative =
+        ana $ \obj ->
+            let asSeq =
+                    fromJava $ (unsafeCast :: Object -> Collection Object) obj
+             in Compose $
+                Annotated (Clojure.meta obj) $
+                if | Clojure.isSeq obj -> FormF asSeq
+                   | Clojure.isSymbol obj ->
+                       SymF $ Symbol (Clojure.namespace obj) (Clojure.name obj)
+                   | Clojure.isVector obj -> VecF asSeq
+                   | otherwise -> LitF obj
+    toNative =
+        cata $ \(Compose (Annotated ann val)) ->
+            flip Clojure.withMeta ann $
+            case val of
+                FormF vals ->
+                    Clojure.asSeq $
+                    (superCast :: Collection Object -> Object) $ toJava vals
+                SymF sym -> mkSym sym
+                VecF v ->
+                    Clojure.vector $
+                    (superCast :: Collection Object -> Object) $ toJava v
+                LitF o -> o
 
-instance ToEnvExpr (AnnST Object) where
+instance ToEnvExpr (AnnST Clojure.Meta) where
     toEnvExpr = toNative
 

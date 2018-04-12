@@ -1,4 +1,4 @@
-{-# LANGUAGE MagicHash #-}
+{-# LANGUAGE MagicHash, ConstraintKinds #-}
 module Ohua.Compat.JVM.Compiler where
 
 
@@ -10,6 +10,7 @@ import           Data.Sequence             as Seq
 import           Java
 import           Java.ConversionUtils
 import           Lens.Micro
+import Lens.Micro.Mtl
 import           Ohua.ALang.Lang
 import           Ohua.Compat.JVM.ClojureST
 import           Ohua.Compat.JVM.Marshal
@@ -20,15 +21,23 @@ import           Ohua.DFGraph
 import           Ohua.DFGraph.Show
 import           Ohua.DFLang.Lang
 import           Ohua.Monad
+import Control.Monad.Reader
 import           Ohua.Types
 import           Ohua.Util
 import qualified Ohua.Util.Str             as Str
 import Ohua.Unit
+import Clojure.Core (Meta(Meta))
 
 
-data {-# CLASS "ohua.Compiler" #-} NCompiler = NCompiler (Object# NCompiler) deriving Class
+data NCompiler = NCompiler @ohua.Compiler
+  deriving Class
 
-data {-# CLASS "ohua.Linker" #-} IsLinker = IsLinker (Object# IsLinker) deriving Class
+data IsLinker = IsLinker @ohua.Linker
+  deriving Class
+
+-- TODO Move this to a more appropriate module at some point
+instance NFData Meta where
+  rnf (Meta m) = rnf m
 
 foreign import java unsafe "@interface resolve" linkerResolveUnqualified :: String -> Java IsLinker (Maybe JString)
 foreign import java unsafe "@interface resolveAlgo" linkerResolveAlgo :: String -> Java IsLinker (Maybe NAlgo)
@@ -42,64 +51,122 @@ forceA :: (NFData a, Applicative m) => a -> m ()
 forceA = (`deepseq` pure ())
 
 
-basicCompile :: Object -> IsLinker -> Object -> IO (OutGraph, Seq (Either (Unevaluated Object) (NLazy Object)))
-basicCompile loggingLevel linker thing =
-  runStderrLoggingT $ filterLogger (\_ l -> l >= fromNative loggingLevel) $ do
-    (graph, envExprs) <- runM $ do
-      (alang, envExprs) <- toALang (mkRegistry linker) st
-      forceLog "alang converted" alang
-      logDebugN $ showT alang
+type CompMEnv = (CustomPasses Object, IsLinker, Object)
+type CompM = ReaderT CompMEnv (LoggingT IO)
+
+type HasCEnv m = MonadReader CompMEnv m
+
+readLinker :: HasCEnv m => m IsLinker
+readLinker = view _2
+
+runCompM ::
+       CompM a -> CustomPasses Object -> Object -> IsLinker -> Object -> IO a
+runCompM comp passes loggingLevel linker o =
+    runStderrLoggingT $
+    filterLogger (\_ l -> l >= fromNative loggingLevel) $
+    flip runReaderT (passes, linker, o) comp
+
+runDefCompM :: CompM a -> Object -> IsLinker -> Object -> IO a
+runDefCompM comp = runCompM comp def { passAfterDFLowering = cleanUnits }
+
+readTarget :: HasCEnv m => m Object
+readTarget = view _3
+
+
+basicCompile :: CompM (OutGraph, JVMEnvExprs)
+basicCompile = do
+    passes <- view _1
+    reg <- mkRegistry
+    thing <- readTarget
+    let st = fromNative thing
+        runM ac =
+            lift $
+            fmap (either (error . Str.toString) id) $
+            runFromBindings opts ac (definedBindings st)
+    (graph, envExprs) <-
+        runM $ do
+            forceA st
+            (alang, envExprs) <- toALang reg st
+            forceLog "alang converted" alang
+            logDebugN $ showT alang
             -- liftIO $ writeFile "alang-dump" $ show alang
-      graph <- pipeline noCustomPasses {passAfterDFLowering = cleanUnits} alang
-      forceLog "graph created" graph
-      pure (graph, envExprs)
+            graph <- pipeline passes alang
+            forceLog "graph created" graph
+            pure (graph, envExprs)
     logDebugN $ asTable $ graph
     pure (graph, envExprs)
+
+
+evalExprs :: (MonadIO m, HasCEnv m)
+          => JVMEnvExprs
+          -> m (Seq (NLazy Object))
+evalExprs exprs = do
+    linker <- readLinker
+    mapM
+        (either (liftIO . javaWith linker . linkerEval . unwrapUnevaluated) pure)
+        exprs
+
+
+mkRegistry :: HasCEnv m => m Registry
+mkRegistry = do
+    linker <- readLinker
+    let withNativeLinker ::
+               (Functor f, NativeConverter b)
+            => (String -> Java IsLinker (f (NativeType b)))
+            -> Binding
+            -> f b
+        withNativeLinker f =
+            (fmap fromNative . unsafePerformJavaWith linker . f . bndToString)
+    pure $
+        Registry
+            (withNativeLinker linkerResolveUnqualified)
+            (withNativeLinker linkerResolveAlgo)
   where
-    st = fromNative thing
-    runM ac = fmap (either (error . Str.toString) id) $ runFromBindings opts ac (definedBindings st)
-
-
-evalExprs :: IsLinker -> Seq (Either (Unevaluated Object) (NLazy Object)) -> IO (Seq (NLazy Object))
-evalExprs linker = mapM $ either (javaWith linker . linkerEval . unwrapUnevaluated) pure
-
-
-mkRegistry :: IsLinker -> Registry
-mkRegistry linker =
-    Registry
-        (withNativeLinker linkerResolveUnqualified)
-        (withNativeLinker linkerResolveAlgo)
-  where
-    withNativeLinker :: (Functor f, NativeConverter b) => (String -> Java IsLinker (f (NativeType b))) -> Binding -> f b
-    withNativeLinker f = (fmap fromNative . pureJavaWith linker . f . bndToString)
-    bndToString = Str.toString . unBinding
-    stringToBinding = Binding . Str.fromString
+    bndToString = Str.toString . unwrap
 
 
 nativeCompile :: Object -> IsLinker -> Object -> IO (NativeType OutGraph)
-nativeCompile loggingLevel linker thing = toNative . fst <$> basicCompile loggingLevel linker thing
+nativeCompile = runDefCompM gNativeCompile
+
+gNativeCompile :: CompM (NativeType OutGraph)
+gNativeCompile = toNative . fst <$> basicCompile
 
 
 nativeCompileWSplice :: Object -> IsLinker -> Object -> IO (NGraph (NLazy Object))
-nativeCompileWSplice logLevel linker thing = do
-    (graph, envExprs0) <- basicCompile logLevel linker thing
-    envExprs <- evalExprs linker envExprs0
-    return $ toNative $ spliceEnv (Seq.index envExprs) graph
+nativeCompileWSplice = runDefCompM gNativeCompileWSplice
+
+gNativeCompileWSplice :: CompM (NGraph (NLazy Object))
+gNativeCompileWSplice = do
+    (graph, envExprs0) <- basicCompile
+    envExprs <- evalExprs envExprs0
+    pure $ toNative $ spliceEnv (Seq.index envExprs) graph
 
 
 nativeCompileAlgo :: Object -> IsLinker -> Object -> IO NAlgo
-nativeCompileAlgo logLevel linker thing = do
-    (alang, envExprs) <- runM $ toALang (mkRegistry linker) st
-    toNative . Algo alang <$> evalExprs linker envExprs
-  where
-    st = fromNative thing
-    runM ac = runStderrLoggingT $ filterLogger (\_ l -> l >= fromNative logLevel) $ fmap (either (error . Str.toString) id) $ runFromBindings opts ac (definedBindings st)
+nativeCompileAlgo = runDefCompM gNativeCompileAlgo
+
+gNativeCompileAlgo :: CompM NAlgo
+gNativeCompileAlgo = do
+    reg <- mkRegistry
+    thing <- readTarget
+    let st = fromNative thing
+        runM ac =
+            lift $
+            fmap (either (error . Str.toString) id) $
+            runFromBindings opts ac (definedBindings st)
+    (alang, envExprs) <- runM $ toALang reg st
+    toNative . Algo alang <$> evalExprs envExprs
 
 
 nativeCompileWithoutEnvEval :: Object -> IsLinker -> Object -> IO (NGraph Object)
-nativeCompileWithoutEnvEval logLevel linker thing = do
-    (graph, envExprs) <- basicCompile logLevel linker thing
-    return $ toNative $ spliceEnv (Seq.index $ fmap (either unwrapUnevaluated superCast) envExprs) graph
+nativeCompileWithoutEnvEval =
+    runDefCompM $ do
+        (graph, envExprs) <- basicCompile
+        return $
+            toNative $
+            spliceEnv
+                (Seq.index $ fmap (either unwrapUnevaluated superCast) envExprs)
+                graph
 
 
 -- nativeToAlang :: Object -> IO ()

@@ -1,19 +1,21 @@
+#! stack runhaskell
+
 {-
-Uses the `etlas deps` command to retrieve the list of dependency jars for 
+Uses the `etlas deps` command to retrieve the list of dependency jars for
 Finally it reads the project.clj template and pastes the extracted jars as resources into the
 project.clj template at the marker location and prepends a notice that the file is generated
 -}
 
 {-# LANGUAGE OverloadedStrings #-}
 
-import qualified Data.Text as T
-import qualified Data.Text.IO as T
-import Data.Maybe
-import Data.Function
-import Control.Applicative
-import Data.Monoid ((<>))
-import Control.Category ((>>>))
-import System.Process
+import           Control.Applicative
+import           Control.Category    ((>>>))
+import           Data.Function
+import           Data.Maybe
+import           Data.Monoid         ((<>))
+import qualified Data.Text           as T
+import qualified Data.Text.IO        as T
+import           System.Process
 
 depInsertMarker = "(- insert-jar-deps -)"
 projectFile = "project.clj"

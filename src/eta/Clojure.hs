@@ -6,7 +6,7 @@ import System.IO.Unsafe
 import System.IO
 import Data.Maybe
 
-data {-# CLASS "clojure.lang.IFn" #-} IFn = IFn (Object# IFn) deriving Class
+data IFn = IFn @clojure.lang.IFn deriving Class
 
 foreign import java "@interface invoke" invoke0 :: Java IFn Object
 foreign import java "@interface invoke" invoke1 :: Object -> Java IFn Object
