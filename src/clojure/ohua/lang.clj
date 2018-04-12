@@ -38,10 +38,10 @@
   `(def ~name (algo ~@code)))
 
 
-(defn ohua-fn
+(defn ohua-fn-with
   "Compile the code, create the graph, prepare the runtime and save the executable with a global, generated name.
    Returns code that invokes the saved executable when evaluated."
-  [code option_]
+  [compile-fn code option_]
   (if (= :import code)
     (do
       (println "Using the :import version of the ohua macro is deprecated")
@@ -63,7 +63,7 @@
                (fn [run] `(do ~run (.get ~qual-ref-sym)))])
             [code identity])
           [linker gen-init-code] (ohua.link/clj-linker)
-          graph (ohua.Compiler/compileAndSpliceEnv
+          graph (compile-fn
                   (mk-hs-compile-options option)
                   linker
                   (macroexpand-all code-with-capture))]
@@ -75,6 +75,7 @@
           (register rt-sym (ohua.Runtime/prepare graph))
           (final-code-modifier `(do ~(gen-init-code) (.run ~(mk-qual rt-sym)))))))))
 
+(defn ohua-fn [code options] (ohua-fn-with #(ohua.Compiler/compileAndSpliceEnv %1 %2 %3) code options))
 
 (defmacro ohua-require [& code] `(ohua.link/ohua-require ~@code))
 
@@ -82,13 +83,13 @@
   `(defn ~(vary-meta name assoc :init-state `(quote ~init-expr)) ~@body))
 
 (defmacro ohua
-  "See `ohua-fn`."
+  "See `ohua-fn-with`."
   ([code] (ohua-fn code {}))
   ([code options] (ohua-fn code options)))
 
 
 (defmacro <-ohua
-  "See `ohua-fn`."
+  "See `ohua-fn-with`."
   ([code] (ohua-fn code #{:capture}))
   ([code options]
     (ohua-fn code

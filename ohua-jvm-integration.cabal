@@ -60,7 +60,6 @@ library
   java-sources:        
     -- It's better not to depend on class files as they are generated
     -- I'd hope at some point we can depend on the clojure source directly
-                       resources/ohua-jvm-runtime-0.1-SNAPSHOT.jar,
                        src/java/ohua/alang/Assignment.java,
                        src/java/ohua/alang/ResolvedSymbol.java,
                        src/java/ohua/alang/Expr.java,
@@ -82,7 +81,9 @@ library
   if flag(debug)
     cpp-options: -DDEBUG=1
   maven-depends:
-    org.clojure:clojure:1.8.0
+                org.clojure:clojure:1.8.0
+              , ohua:jvm-runtime:0.1-SNAPSHOT
+  maven-repos: file:/Users/justusadam/.m2/repository
 
 test-suite jvm-integration-tests
   main-is:             Spec.hs
