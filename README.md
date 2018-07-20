@@ -1,3 +1,5 @@
+![](https://raw.githubusercontent.com/ohua-dev/ohua/master/logos/fileIcons/iconFull/java/export_wide_lang_transparent.png "Ohua for the JVM")
+
 # Ohua JVM integration
 
 Adapter for ohua and the JVM
