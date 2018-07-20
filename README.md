@@ -14,3 +14,6 @@ Therefore both the compiler and the etlas project management tool need to be ins
 - install the dependencies with `etlas install --dependencies-only`
 - build with `etlas build`
 
+***
+The Java Logo is trademark of Oracle Corporation (https://oracle.com/java). 
+The Ohua Logo is distributed under CC-BY (https://ohua-dev.github.io/ohua/).
