@@ -80,11 +80,7 @@ library
   ghc-options: -optjavac "-source 1.8 -target 1.8"
   if flag(debug)
     cpp-options: -DDEBUG=1
-  maven-depends:
-                org.clojure:clojure:1.8.0
-              , ohua:jvm-runtime:0.1-SNAPSHOT
-  maven-repos: file:/Users/justusadam/.m2/repository
-
+    
 test-suite jvm-integration-tests
   main-is:             Spec.hs
   other-modules: 
