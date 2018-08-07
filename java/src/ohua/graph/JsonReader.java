@@ -12,6 +12,7 @@ import java.nio.file.Path;
 import ohua.util.Lazy;
 import ohua.graph.*;
 import ohua.util.Tuple;
+import ohua.util.Conversions;
 
 import java.io.IOException;
 
@@ -53,7 +54,7 @@ public abstract class JsonReader {
     }
 
     private static String sfRefToString(Tuple<String[], String> sfRef) {
-        return String.join(".", sfRef._s) + "/" + sfRef._t;
+        return Conversions.sfRefToString(sfRef);
     }
 
     private static Arc<Integer> parseArc(JsonObject o) {

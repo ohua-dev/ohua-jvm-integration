@@ -5,6 +5,8 @@ import java.util.stream.IntStream;
 import java.util.function.Supplier;
 import java.util.Arrays;
 import java.io.IOException;
+import java.util.List;
+import java.util.ArrayList;
 
 import ohua.graph.JsonReader;
 import ohua.util.*;
@@ -12,6 +14,7 @@ import ohua.graph.GraphFile;
 import ohua.graph.Graph;
 import ohua.graph.Arc;
 import ohua.graph.Source;
+import ohua.loader.JavaProviderFromAnnotatedMethod;
 
 /**
  * Top level interface for the ohua-java integration.
@@ -45,12 +48,20 @@ public abstract class Runner {
         }
     }
 
-    /**
-     * Read the graph description from the provided file and compile it into a
-     * runnable format.
-     */
-    public CallableAlgorithm compile(final Path graphFile) throws IOException {
-        final GraphFile gf = JsonReader.read(graphFile);
+    private void ensureStatefulFunctionsAreLoaded(Iterable<Tuple<String[], String>> functions) throws FunctionLoadingException {
+        StatefulFunctionProvider provider = new JavaProviderFromAnnotatedMethod();
+        List missing = new ArrayList<>();
+        for (Tuple<String[], String> ref : functions) {
+            if (!provider.exists(Conversions.nsRefToString(ref._s), ref._t)) {
+                missing.add(ref);
+            }
+        }
+        if (!missing.isEmpty()) {
+            throw new FunctionLoadingException(missing);
+        }
+    }
+
+    public static CallableAlgorithm createCallable(final GraphFile gf) throws FunctionLoadingException {
         int ma = gf.mainArity;
         final MutableBox<Object[]> mbox = MutableBox.empty();
         final Lazy<Object>[] initarr = IntStream.range(0, ma).boxed().map(i -> Lazy.createLazy(() -> mbox.get()[i])).toArray(Lazy[]::new);
@@ -66,5 +77,13 @@ public abstract class Runner {
             }).toArray(Arc[]::new);
         Runnable r = Runtime.prepare(new Graph (gr.operators, newArcs));
         return new CallableAlgorithm(r, mbox);
+    }
+
+    /**
+     * Read the graph description from the provided file and compile it into a
+     * runnable format.
+     */
+    public static CallableAlgorithm loadFile(final Path graphFile) throws IOException, FunctionLoadingException {
+        return Runner.createCallable(JsonReader.read(graphFile));
     }
 }
