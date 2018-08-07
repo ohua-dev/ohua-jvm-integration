@@ -35,9 +35,10 @@ public abstract class JsonReader {
     }
 
     private static Graph<Integer> parseGraph(JsonObject o) {
-        return new Graph((Operator[]) o.getJsonArray("operators")
-                         .getValuesAs(JsonReader::parseOperator).toArray(),
-                         (Arc[]) o.getJsonArray("arcs").getValuesAs(JsonReader::parseArc).toArray());
+        return new Graph(o.getJsonArray("operators")
+                         .getValuesAs(JsonReader::parseOperator).stream().toArray(Operator[]::new),
+                         o.getJsonArray("arcs").getValuesAs(JsonReader::parseArc).stream().toArray(Arc[]::new)
+                         );
     }
 
     private static Operator parseOperator (JsonObject o) {
@@ -49,7 +50,8 @@ public abstract class JsonReader {
     }
 
     private static Tuple<String[],String> parseSfDep(JsonObject o) {
-        return new Tuple<>((String[]) o.getJsonArray("namespace").getValuesAs(JsonString::getString).toArray(),
+        return new Tuple<>(o.getJsonArray("namespace").getValuesAs(JsonString::getString)
+                           .stream().toArray(String[]::new),
                            o.getString("name"));
     }
 

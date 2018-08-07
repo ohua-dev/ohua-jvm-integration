@@ -25,7 +25,7 @@ public abstract class Runner {
     /**
      * An object encapsulating the runtime representation of an ohua graph.
      */
-    static final class CallableAlgorithm {
+    public static final class CallableAlgorithm {
         private final Runnable runnableGraph;
         private final MutableBox<Object[]> initarr;
 
@@ -65,7 +65,7 @@ public abstract class Runner {
         int ma = gf.mainArity;
         final MutableBox<Object[]> mbox = MutableBox.empty();
         final Lazy<Object>[] initarr = IntStream.range(0, ma).boxed().map(i -> Lazy.createLazy(() -> mbox.get()[i])).toArray(Lazy[]::new);
-        Graph gr = gf.graph;
+        Graph<Integer> gr = gf.graph;
         Arc<Lazy<Object>>[] newArcs = Arrays.stream(gr.arcs).map(arc -> {
                 if (arc.source instanceof Source.Env) {
                     Source.Env se = (Source.Env) arc.source;
