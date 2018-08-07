@@ -48,7 +48,7 @@ public abstract class Runner {
         }
     }
 
-    private void ensureStatefulFunctionsAreLoaded(Iterable<Tuple<String[], String>> functions) throws FunctionLoadingException {
+    private static void ensureStatefulFunctionsAreLoaded(Iterable<Tuple<String[], String>> functions) throws FunctionLoadingException {
         StatefulFunctionProvider provider = new JavaProviderFromAnnotatedMethod();
         List missing = new ArrayList<>();
         for (Tuple<String[], String> ref : functions) {
@@ -62,6 +62,7 @@ public abstract class Runner {
     }
 
     public static CallableAlgorithm createCallable(final GraphFile gf) throws FunctionLoadingException {
+        Runner.ensureStatefulFunctionsAreLoaded(gf.sfDependencies);
         int ma = gf.mainArity;
         final MutableBox<Object[]> mbox = MutableBox.empty();
         final Lazy<Object>[] initarr = IntStream.range(0, ma).boxed().map(i -> Lazy.createLazy(() -> mbox.get()[i])).toArray(Lazy[]::new);
