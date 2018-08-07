@@ -1,0 +1,8 @@
+(ns math-tests)
+
+(require-sf [test_operators [add sub mult]])
+
+(defalgo square [a]
+  (mult a a))
+(defalgo main [a b c d]
+  (add (sub b c) (square d)))
