@@ -29,9 +29,11 @@ public abstract class JsonReader {
     }
 
     private static GraphFile parseGraphFile(JsonObject o) {
-        return new GraphFile(JsonReader.parseGraph(o.getJsonObject("graph")),
+        JsonObject grObject = o.getJsonObject("graph");
+        return new GraphFile(JsonReader.parseGraph(grObject),
                              JsonReader.parseSfDeps(o.getJsonArray("sfDependencies")),
-                             o.getInt("mainArity"));
+                             o.getInt("mainArity"),
+                             JsonReader.parseTarget(grObject.getJsonObject("return_arc")));
     }
 
     private static Graph<Integer> parseGraph(JsonObject o) {
